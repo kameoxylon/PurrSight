@@ -159,9 +159,37 @@ implementation decision to come out of Phase −1:
 - Disagreement across runs is itself a useful signal — surface "the model was unsure
   about this feature" rather than hiding it.
 
-Three parallel calls cost ~6 s wall-clock (they don't serialise) and roughly 3× tokens,
-which at ~1250 prompt tokens is negligible. It converts our worst finding into an
-ensemble, and it makes the demo defensible when a judge asks "would it say that again?"
+Three parallel calls cost ~6 s wall-clock (they don't serialise) and roughly 3× tokens.
+Measured in Phase 1 against the real deployment, a full 3-sample assessment bills
+**~4,600 input + ~570 output tokens**, which costs:
+
+| Prompt cache | Cost / assessment | Cost / 1,000 |
+| --- | --- | --- |
+| Cold (nothing cached) | ~$0.015 | ~$15 |
+| Warm (~84 % of input cached) | ~$0.008 | ~$8 |
+
+**Assume the cold number when sizing anything.** The warm figure was measured minutes
+after a run of smoke tests had already primed the prefix cache — it is the best case, not
+the expected case. Two things work against us:
+
+- Azure evicts prompt-prefix caches after a short idle window, and a low-traffic public
+  demo site is idle almost all the time. Global Standard routing does not guarantee you
+  land on a node that has your prefix.
+- **The three samples fire in parallel, so they cannot warm each other.** All three are
+  in flight before any of them returns, which means a cold cache is not "the first call
+  costs more" — the *entire assessment* pays full input rate. Caching only helps when a
+  *previous* assessment ran recently enough.
+
+This was observed directly, not just reasoned about: a freshly restarted server billed
+`1531in/20out` on **all three** samples with **zero** cached tokens, while a server whose
+cache had been primed minutes earlier billed `1531in (1280 cached)` on all three.
+
+The ensemble is affordable either way, and the server logs print the live per-assessment
+figure, so this never has to be guessed again — but budget at ~$15/1k, and treat anything
+better as a discount you happened to get.
+
+It converts our worst finding into an ensemble, and it makes the demo defensible when a
+judge asks "would it say that again?"
 
 ### 4. Schema enforcement — ✅ genuinely fixed by strict structured outputs
 

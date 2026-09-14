@@ -28,6 +28,14 @@ import {
 } from '../contract';
 import { getModelName, runSingleAssessment, type RunOutcome } from './client';
 import { PROMPT_VERSION } from './prompt';
+import {
+  EMPTY_USAGE,
+  addUsage,
+  estimateCostUsd,
+  formatPerThousand,
+  formatUsd,
+  type TokenUsage,
+} from './pricing';
 import { aggregate } from './scoring';
 import type { ValidatedResponse } from './schema';
 
@@ -97,29 +105,41 @@ export const assessImage: AssessImageFn = async (input): Promise<AssessResult> =
     };
   }
 
+  // Ties the three concurrent sample logs to one assessment. Without it,
+  // interleaved output from parallel requests is unreadable.
+  const id = Math.random().toString(36).slice(2, 8);
+  const startedAt = Date.now();
+  const sizeKb = Math.round((input.imageBase64.length * 0.75) / 1024);
+  console.info(`[assess] ${id} start | ${input.mimeType} ~${sizeKb}KB | ${SAMPLES_PER_ASSESSMENT} samples`);
+
   try {
     // VOTE RULE 1: a run that failed does not get a vote. It is discarded
     // here and never reaches the scoring layer.
     const settled = await Promise.allSettled(
-      Array.from({ length: SAMPLES_PER_ASSESSMENT }, () => runSingleAssessment(input)),
+      Array.from({ length: SAMPLES_PER_ASSESSMENT }, (_, i) =>
+        runSingleAssessment(input, `${id}.${i + 1}`),
+      ),
     );
 
     const survivors: ValidatedResponse[] = [];
     const failures: AssessErrorKind[] = [];
+    // Every call is billed, including ones whose result we discard.
+    let billed: TokenUsage = EMPTY_USAGE;
 
-    for (const outcome of settled) {
+    for (const [i, outcome] of settled.entries()) {
       if (outcome.status === 'rejected') {
         // runSingleAssessment returns failures as values, so a rejection here
         // means a genuine bug rather than a provider problem.
-        console.error('[assess] sample threw unexpectedly:', outcome.reason);
+        console.error(`[assess] ${id}.${i + 1} threw unexpectedly:`, outcome.reason);
         failures.push('internal');
         continue;
       }
       const run: RunOutcome = outcome.value;
+      billed = addUsage(billed, run.usage);
       if (run.ok) {
         survivors.push(run.value);
       } else {
-        console.error(`[assess] sample failed (${run.kind}):`, run.detail);
+        console.error(`[assess] ${id}.${i + 1} failed (${run.kind}):`, run.detail);
         failures.push(run.kind);
       }
     }
@@ -127,14 +147,59 @@ export const assessImage: AssessImageFn = async (input): Promise<AssessResult> =
     // Report WHY the samples died rather than letting aggregate()'s generic
     // 'bad_model_response' mask a rate limit or a dead endpoint — A's route
     // turns these kinds into different HTTP statuses.
-    if (survivors.length < MIN_CONTRIBUTING_SAMPLES) {
-      return toError(dominantKind(failures));
-    }
+    const result =
+      survivors.length < MIN_CONTRIBUTING_SAMPLES
+        ? toError(dominantKind(failures))
+        : aggregate(survivors, { model: getModelName(), promptVersion: PROMPT_VERSION });
 
-    return aggregate(survivors, { model: getModelName(), promptVersion: PROMPT_VERSION });
+    logOutcome(id, startedAt, survivors.length, billed, result);
+    return result;
   } catch (err) {
     // Last line of defence for the never-throws guarantee.
-    console.error('[assess] unexpected failure:', err);
+    console.error(`[assess] ${id} unexpected failure:`, err);
     return toError('internal');
   }
 };
+
+/**
+ * The voted result, after the ensemble has been reconciled. Per-AU scores are
+ * logged with their agreement counts, so a surprising number in the UI can be
+ * traced back to whether the runs actually agreed on it.
+ */
+function logOutcome(
+  id: string,
+  startedAt: number,
+  contributing: number,
+  billed: TokenUsage,
+  result: AssessResult,
+): void {
+  const usd = estimateCostUsd(billed);
+  const cached = billed.cachedTokens > 0 ? ` ${billed.cachedTokens}cached` : '';
+  const cost =
+    `${billed.promptTokens}in${cached}/${billed.completionTokens}out ` +
+    `~${formatUsd(usd)} (${formatPerThousand(usd)})`;
+
+  const head =
+    `[assess] ${id} ${result.status} in ${((Date.now() - startedAt) / 1000).toFixed(1)}s ` +
+    `| ${contributing}/${SAMPLES_PER_ASSESSMENT} samples | ${cost}`;
+
+  if (result.status === 'assessed') {
+    const a = result.assessment;
+    const units = a.actionUnits
+      .map((u) => `${u.id}=${u.score ?? 'null'}(${u.agreement}/${a.meta.samples})`)
+      .join(' ');
+    const caveats = a.caveats.map((c) => c.kind).join(',') || 'none';
+    console.info(
+      `${head} | ${units} | ${a.rawScore}/${a.maxPossible} = ${a.normalizedScore.toFixed(2)} ` +
+        `${a.band}${a.aboveThreshold ? ' ABOVE-THRESHOLD' : ''} | scorable ${a.scorableCount}/5 | caveats: ${caveats}`,
+    );
+    return;
+  }
+
+  if (result.status === 'rejected') {
+    console.info(`${head} | reason=${result.reason}`);
+    return;
+  }
+
+  console.error(`${head} | kind=${result.kind} retryable=${result.retryable}`);
+}

@@ -22,12 +22,25 @@ import type { ChatCompletionContentPart } from 'openai/resources/chat/completion
 import { DefaultAzureCredential, getBearerTokenProvider } from '@azure/identity';
 import type { AssessErrorKind, AssessInput } from '../contract';
 import { SYSTEM_PROMPT, USER_PROMPT } from './prompt';
+import {
+  EMPTY_USAGE,
+  addUsage,
+  estimateCostUsd,
+  formatUsd,
+  type TokenUsage,
+} from './pricing';
 import { FGS_JSON_SCHEMA, parseModelResponse, type ValidatedResponse } from './schema';
 
-/** Outcome of a SINGLE sample. Failures are values, never exceptions. */
+/**
+ * Outcome of a SINGLE sample. Failures are values, never exceptions.
+ *
+ * `usage` is reported on BOTH branches: a response that failed validation was
+ * still generated and still billed, and the retry bills again. Dropping it on
+ * failure would understate cost exactly when cost is highest.
+ */
 export type RunOutcome =
-  | { ok: true; value: ValidatedResponse }
-  | { ok: false; kind: AssessErrorKind; detail: string };
+  | { ok: true; value: ValidatedResponse; usage: TokenUsage }
+  | { ok: false; kind: AssessErrorKind; detail: string; usage: TokenUsage };
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_OUTPUT_TOKENS = 1_000;
@@ -195,11 +208,17 @@ function buildContent(input: AssessInput): ChatCompletionContentPart[] {
   ];
 }
 
+interface RawCall {
+  text: string;
+  finishReason: string;
+  usage: TokenUsage;
+}
+
 async function callOnce(
   { client, model }: ResolvedClient,
   input: AssessInput,
   timeoutMs: number,
-): Promise<string> {
+): Promise<RawCall> {
   const completion = await client.chat.completions.create(
     {
       model,
@@ -220,23 +239,38 @@ async function callOnce(
   );
 
   const choice = completion.choices[0];
+  const usage: TokenUsage = {
+    promptTokens: completion.usage?.prompt_tokens ?? 0,
+    cachedTokens: completion.usage?.prompt_tokens_details?.cached_tokens ?? 0,
+    completionTokens: completion.usage?.completion_tokens ?? 0,
+  };
+
   if (choice?.finish_reason === 'length') {
     // Truncated JSON parses as garbage; say why rather than blaming the schema.
-    throw new ParseFailure(`response truncated at ${MAX_OUTPUT_TOKENS} tokens`);
+    throw new ParseFailure(`response truncated at ${MAX_OUTPUT_TOKENS} tokens`, usage);
   }
   if (choice?.finish_reason === 'content_filter') {
-    throw new ParseFailure('response blocked by content filter');
+    throw new ParseFailure('response blocked by content filter', usage);
   }
 
   const text = choice?.message?.content;
   if (!text) {
-    throw new ParseFailure('model returned an empty message');
+    throw new ParseFailure('model returned an empty message', usage);
   }
-  return text;
+
+  return { text, finishReason: choice?.finish_reason ?? 'unknown', usage };
 }
 
 /** A recoverable "the model said something unusable" — worth one retry. */
-class ParseFailure extends Error {}
+class ParseFailure extends Error {
+  constructor(
+    message: string,
+    /** Billed even though the response was unusable. */
+    readonly usage: TokenUsage = EMPTY_USAGE,
+  ) {
+    super(message);
+  }
+}
 
 function validate(text: string): ValidatedResponse {
   let json: unknown;
@@ -257,8 +291,14 @@ function validate(text: string): ValidatedResponse {
  * Run ONE sample. Retries exactly once, and only when the model produced
  * something unusable — never on a transport error, which the ensemble and the
  * user's retry button already cover.
+ *
+ * `sampleId` only tags log lines. Three samples run concurrently, so without
+ * it the interleaved output cannot be attributed to a specific call.
  */
-export async function runSingleAssessment(input: AssessInput): Promise<RunOutcome> {
+export async function runSingleAssessment(
+  input: AssessInput,
+  sampleId = 'sample',
+): Promise<RunOutcome> {
   const deadline = Date.now() + getTimeoutMs();
   const remaining = () => deadline - Date.now();
 
@@ -267,10 +307,17 @@ export async function runSingleAssessment(input: AssessInput): Promise<RunOutcom
     resolved = resolveClient();
   } catch (err) {
     // Misconfiguration, not a model failure. Retrying cannot help.
-    return { ok: false, kind: 'internal', detail: err instanceof Error ? err.message : String(err) };
+    return {
+      ok: false,
+      kind: 'internal',
+      detail: err instanceof Error ? err.message : String(err),
+      usage: EMPTY_USAGE,
+    };
   }
 
   let lastParseError = '';
+  // Accumulated across attempts: a retry bills a second time.
+  let billed: TokenUsage = EMPTY_USAGE;
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const budget = remaining();
@@ -279,19 +326,44 @@ export async function runSingleAssessment(input: AssessInput): Promise<RunOutcom
         ok: false,
         kind: 'timeout',
         detail: lastParseError || 'budget exhausted before the call completed',
+        usage: billed,
       };
     }
 
+    const startedAt = Date.now();
+    let raw: RawCall | undefined;
     try {
-      return { ok: true, value: validate(await callOnce(resolved, input, budget)) };
+      raw = await callOnce(resolved, input, budget);
+      const value = validate(raw.text);
+      billed = addUsage(billed, raw.usage);
+
+      const cached = raw.usage.cachedTokens > 0 ? ` (${raw.usage.cachedTokens} cached)` : '';
+      console.info(
+        `[assess] ${sampleId}${attempt > 0 ? ' (retry)' : ''} ok in ${Date.now() - startedAt}ms ` +
+          `| finish=${raw.finishReason} ` +
+          `tokens=${raw.usage.promptTokens}in${cached}/${raw.usage.completionTokens}out ` +
+          `~${formatUsd(estimateCostUsd(raw.usage))} | ${describe(value)}`,
+      );
+      return { ok: true, value, usage: billed };
     } catch (err) {
       if (!(err instanceof ParseFailure)) {
-        return { ok: false, ...classify(err) };
+        return { ok: false, ...classify(err), usage: billed };
       }
+      // The unusable response was still generated, so it was still billed.
+      billed = addUsage(billed, raw?.usage ?? err.usage);
       lastParseError = err.message;
+      console.warn(
+        `[assess] ${sampleId} unusable response after ${Date.now() - startedAt}ms: ${err.message}`,
+      );
       if (remaining() < MIN_RETRY_BUDGET_MS) break;
     }
   }
 
-  return { ok: false, kind: 'bad_model_response', detail: lastParseError };
+  return { ok: false, kind: 'bad_model_response', detail: lastParseError, usage: billed };
+}
+
+/** One-line summary of a single run, before any voting has happened. */
+function describe(value: ValidatedResponse): string {
+  if (value.status === 'rejected') return `rejected:${value.rejectionReason}`;
+  return value.actionUnits.map((au) => `${au.id}=${au.score ?? 'null'}`).join(' ');
 }

@@ -177,6 +177,25 @@ it breaks the other person's build.
 **Checkpoint 1:** A has a working upload→mock→render loop. B has voted, aggregated JSON
 coming back from the model. Neither has touched the other's files.
 
+### Open item carried out of Phase 1 — content-safety false positive
+
+Azure content safety returns **HTTP 400** on some legitimate but low-quality cat photos
+(*"your input image may contain content that is not allowed by our content safety
+system"* — reproduced with a heavily pixelated 48px-wide cat). `client.ts` classifies all
+4xx as `internal`, so the user gets HTTP 502, `retryable: false`, and *"Something went
+wrong on our end"* — a dead end for what is really a **fixable input problem**.
+
+Decide in Phase 2, because it changes A↔B seam semantics and both people should agree:
+
+1. Map a content-filter 400 to `rejected` / `image_quality`, which already carries retake
+   tips. Best UX, but it reuses a rejection reason for a cause the model never judged, and
+   content safety also fires on genuinely inappropriate uploads.
+2. Keep it an `error` but give it its own honest message ("We couldn't process that photo
+   — please try a clearer one") instead of blaming the server.
+
+Option 2 is the smaller change and does not overload an existing reason. Not done
+unilaterally: it is a user-visible behaviour change on a frozen seam.
+
 ---
 
 ## Phase 2 — Parallel. Build the substance.
