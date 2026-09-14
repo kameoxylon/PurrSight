@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@azure/identity": "^4.13.2",
+    "html-to-image": "^1.11.13",
     "next": "15.5.25",
     "openai": "^7.10.0",
     "react": "19.1.0",

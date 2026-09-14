@@ -1,26 +1,82 @@
 @import "tailwindcss";
 
+/* PurrSight cat-fur palette. Tokens flip in dark mode so components never
+   hardcode light-only colours. Ginger = brand, eye-blue = accent pop. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --surface: #fdf6ec;
+  --surface-2: #f6ead7;
+  --card: #fffdfa;
+  --ink: #2a211c;
+  --muted: #6f6055;
+  --faint: #9c8b7d;
+  --line: #ecdfce;
+  --brand: #e07a2f;
+  --brand-hover: #c8631d;
+  --brand-ink: #ffffff;
+  --accent: #2f7dd1;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --surface: #191512;
+    --surface-2: #211b17;
+    --card: #251f1b;
+    --ink: #f4ebe1;
+    --muted: #bcac9d;
+    --faint: #8b7b6d;
+    --line: #3a322c;
+    --brand: #f0904a;
+    --brand-hover: #f7a566;
+    --brand-ink: #2a1a0d;
+    --accent: #5aa8f0;
   }
 }
 
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-ink: var(--brand-ink);
+  --color-accent: var(--accent);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(1100px 620px at 50% -12%, var(--surface-2), transparent 62%),
+    var(--surface);
+  color: var(--ink);
+  min-height: 100vh;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Paw-print cursor on interactive elements (ginger paw, white outline). */
+button:enabled,
+a[href],
+label[role="button"] {
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='28'%20height='28'%20viewBox='0%200%2028%2028'%3E%3Cg%20fill='%23e07a2f'%20stroke='white'%20stroke-width='1.2'%3E%3Cellipse%20cx='14'%20cy='18'%20rx='6.5'%20ry='5.5'/%3E%3Ccircle%20cx='6'%20cy='11'%20r='2.7'/%3E%3Ccircle%20cx='11.5'%20cy='7.5'%20r='3'/%3E%3Ccircle%20cx='16.5'%20cy='7.5'%20r='3'/%3E%3Ccircle%20cx='22'%20cy='11'%20r='2.7'/%3E%3C/g%3E%3C/svg%3E") 6 6, pointer;
+}
+
+/* Subtle repeating paw-print watermark behind all content. */
+.paw-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='150'%20height='150'%20viewBox='0%200%20150%20150'%3E%3Cg%20fill='%238a6d55'%3E%3Cg%20transform='translate(20%2026)%20rotate(-18)'%3E%3Cellipse%20cx='16'%20cy='22'%20rx='8'%20ry='6.5'/%3E%3Ccircle%20cx='6'%20cy='12'%20r='3.2'/%3E%3Ccircle%20cx='13'%20cy='7'%20r='3.6'/%3E%3Ccircle%20cx='20'%20cy='7'%20r='3.6'/%3E%3Ccircle%20cx='27'%20cy='12'%20r='3.2'/%3E%3C/g%3E%3Cg%20transform='translate(90%2088)%20rotate(12)'%3E%3Cellipse%20cx='16'%20cy='22'%20rx='8'%20ry='6.5'/%3E%3Ccircle%20cx='6'%20cy='12'%20r='3.2'/%3E%3Ccircle%20cx='13'%20cy='7'%20r='3.6'/%3E%3Ccircle%20cx='20'%20cy='7'%20r='3.6'/%3E%3Ccircle%20cx='27'%20cy='12'%20r='3.2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  background-size: 150px 150px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .paw-bg {
+    opacity: 0.06;
+  }
 }

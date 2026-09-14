@@ -16,10 +16,10 @@ export default function ScoreDial({ assessment }: { assessment: Assessment }) {
     <div className={`rounded-2xl border ${style.border} ${style.bg} p-5`}>
       <div className="flex items-baseline justify-between">
         <span className={`text-sm font-semibold uppercase tracking-wide ${style.text}`}>{style.label}</span>
-        <span className="text-2xl font-bold tabular-nums text-slate-800">{normalizedScore.toFixed(2)}</span>
+        <span className="text-2xl font-bold tabular-nums text-ink">{normalizedScore.toFixed(2)}</span>
       </div>
 
-      <div className="relative mt-4 h-3 w-full rounded-full bg-slate-200">
+      <div className="relative mt-4 h-3 w-full rounded-full bg-black/10 dark:bg-white/10">
         {/* fill */}
         <div
           className="absolute inset-y-0 left-0 rounded-full"
@@ -27,7 +27,7 @@ export default function ScoreDial({ assessment }: { assessment: Assessment }) {
         />
         {/* threshold marker */}
         <div
-          className="absolute -top-1.5 bottom-[-0.375rem] w-0.5 bg-slate-500"
+          className="absolute -top-1.5 bottom-[-0.375rem] w-0.5 bg-faint"
           style={{ left: `${thresholdPct}%` }}
           aria-hidden
         />
@@ -39,13 +39,13 @@ export default function ScoreDial({ assessment }: { assessment: Assessment }) {
         />
       </div>
 
-      <div className="mt-2 flex justify-between text-xs text-slate-500">
+      <div className="mt-2 flex justify-between text-xs text-muted">
         <span>0 · comfortable</span>
         <span>threshold {ANALGESIA_THRESHOLD}</span>
         <span>1 · marked</span>
       </div>
 
-      <p className="mt-3 text-sm text-slate-600">
+      <p className="mt-3 text-sm text-muted">
         {aboveThreshold
           ? 'This score is above the pain-relief threshold used in the original study.'
           : 'This score is below the pain-relief threshold used in the original study.'}

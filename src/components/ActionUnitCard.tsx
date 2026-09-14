@@ -5,13 +5,13 @@ import { isLowerReliability, scoreLabel } from '@/lib/ui';
 function chipClasses(score: 0 | 1 | 2 | null): string {
   switch (score) {
     case 0:
-      return 'bg-emerald-100 text-emerald-800';
+      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
     case 1:
-      return 'bg-amber-100 text-amber-800';
+      return 'bg-amber-500/15 text-amber-700 dark:text-amber-300';
     case 2:
-      return 'bg-rose-100 text-rose-800';
+      return 'bg-rose-500/15 text-rose-700 dark:text-rose-300';
     default:
-      return 'bg-slate-100 text-slate-500';
+      return 'bg-black/5 text-faint dark:bg-white/10';
   }
 }
 
@@ -28,14 +28,14 @@ export default function ActionUnitCard({
   return (
     <div
       className={`rounded-xl border p-4 ${
-        lowerReliability ? 'border-slate-200 bg-slate-50/60' : 'border-slate-200 bg-white'
+        lowerReliability ? 'border-line bg-surface-2/60' : 'border-line bg-card'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold text-slate-800">{au.label}</h3>
+          <h3 className="font-semibold text-ink">{au.label}</h3>
           {lowerReliability && (
-            <span className="mt-0.5 inline-block text-xs font-medium text-slate-400">
+            <span className="mt-0.5 inline-block text-xs font-medium text-faint">
               lower-reliability feature
             </span>
           )}
@@ -45,12 +45,12 @@ export default function ActionUnitCard({
         </span>
       </div>
 
-      <p className={`mt-2 text-sm ${notAssessable ? 'italic text-slate-500' : 'text-slate-600'}`}>
+      <p className={`mt-2 text-sm ${notAssessable ? 'italic text-faint' : 'text-muted'}`}>
         {notAssessable && au.notScorableReason ? au.notScorableReason : au.evidence}
       </p>
 
       {!notAssessable && (
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-xs text-faint">
           {au.agreement} of {samples} runs agreed
         </p>
       )}

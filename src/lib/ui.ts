@@ -38,24 +38,24 @@ export interface BandStyle {
 export const BAND_STYLES: Record<Band, BandStyle> = {
   minimal: {
     label: 'Minimal signs',
-    text: 'text-emerald-700',
-    bg: 'bg-emerald-50',
-    border: 'border-emerald-200',
-    solid: '#059669',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    bg: 'bg-emerald-500/10',
+    border: 'border-emerald-500/30',
+    solid: '#10b981',
   },
   possible: {
     label: 'Possible discomfort',
-    text: 'text-amber-700',
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    solid: '#d97706',
+    text: 'text-amber-700 dark:text-amber-300',
+    bg: 'bg-amber-500/10',
+    border: 'border-amber-500/30',
+    solid: '#f59e0b',
   },
   likely: {
     label: 'Likely pain',
-    text: 'text-rose-700',
-    bg: 'bg-rose-50',
-    border: 'border-rose-200',
-    solid: '#e11d48',
+    text: 'text-rose-700 dark:text-rose-300',
+    bg: 'bg-rose-500/10',
+    border: 'border-rose-500/30',
+    solid: '#f43f5e',
   },
 };
 

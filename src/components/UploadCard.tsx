@@ -3,6 +3,13 @@
 import { useCallback, useRef, useState } from 'react';
 import Image from 'next/image';
 import { prepareImage, UnsupportedImageError } from '@/lib/prepare-image';
+import CatHead from './CatHead';
+
+const DEMOS = [
+  { src: '/demo/tabby.svg', label: 'Tabby' },
+  { src: '/demo/grey.svg', label: 'Grey' },
+  { src: '/demo/calico.svg', label: 'Calico' },
+];
 
 /**
  * Upload surface: drag-and-drop on desktop, tap-to-pick / camera on mobile.
@@ -60,8 +67,25 @@ export default function UploadCard({
     if (inputRef.current) inputRef.current.value = '';
   };
 
+  const loadDemo = useCallback(
+    async (src: string) => {
+      setError(null);
+      try {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error('fetch failed');
+        const raw = await res.blob();
+        const name = src.split('/').pop() || 'demo';
+        const file = new File([raw], name, { type: raw.type || 'image/svg+xml' });
+        await handleFile(file);
+      } catch {
+        setError('Could not load that sample photo. Please try uploading your own.');
+      }
+    },
+    [handleFile],
+  );
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+    <div className="rounded-2xl border border-line bg-card p-5 shadow-sm">
       <input
         ref={inputRef}
         type="file"
@@ -72,38 +96,61 @@ export default function UploadCard({
       />
 
       {!preview ? (
-        <button
-          type="button"
-          disabled={disabled || preparing}
-          onClick={() => inputRef.current?.click()}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOver(false);
-            handleFile(e.dataTransfer.files?.[0]);
-          }}
-          className={`flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-12 text-center transition ${
-            dragOver ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300 hover:border-slate-400'
-          } disabled:opacity-60`}
-        >
-          <span className="text-4xl" aria-hidden>
-            🐱
-          </span>
-          <span className="font-semibold text-slate-700">
-            {preparing ? 'Preparing photo…' : 'Upload a photo of your cat'}
-          </span>
-          <span className="text-sm text-slate-500">
-            Tap to choose or take a photo · or drag an image here
-          </span>
-          <span className="text-xs text-slate-400">JPEG, PNG, or WebP · front-facing works best</span>
-        </button>
+        <>
+          <button
+            type="button"
+            disabled={disabled || preparing}
+            onClick={() => inputRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              handleFile(e.dataTransfer.files?.[0]);
+            }}
+            className={`flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-12 text-center transition ${
+              dragOver ? 'border-brand bg-brand/10' : 'border-line hover:border-brand/60'
+            } disabled:opacity-60`}
+          >
+            <CatHead className="h-16 w-16" />
+            <span className="font-semibold text-ink">
+              {preparing ? 'Preparing photo…' : 'Upload a photo of your cat'}
+            </span>
+            <span className="text-sm text-muted">
+              Tap to choose or take a photo · or drag an image here
+            </span>
+            <span className="text-xs text-faint">JPEG, PNG, or WebP · front-facing works best</span>
+          </button>
+
+          <div className="mt-4">
+            <p className="mb-2 text-center text-xs text-faint">No cat handy? Try a sample:</p>
+            <div className="flex justify-center gap-3">
+              {DEMOS.map((d) => (
+                <button
+                  key={d.src}
+                  type="button"
+                  disabled={disabled || preparing}
+                  onClick={() => loadDemo(d.src)}
+                  className="group flex flex-col items-center gap-1 disabled:opacity-60"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={d.src}
+                    alt={`${d.label} sample cat`}
+                    className="h-16 w-16 rounded-xl border border-line object-cover transition group-hover:border-brand"
+                  />
+                  <span className="text-xs text-muted">{d.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
       ) : (
         <div className="space-y-4">
-          <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-xl bg-slate-100">
+          <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-xl bg-surface-2">
             {/* Object URL preview — next/image with unoptimized to skip the loader. */}
             <Image src={preview} alt="Your cat" fill unoptimized className="object-cover" />
           </div>
@@ -112,7 +159,7 @@ export default function UploadCard({
               type="button"
               disabled={disabled || !blob}
               onClick={() => blob && onSubmit(blob)}
-              className="rounded-full bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+              className="rounded-full bg-brand px-6 py-2.5 text-sm font-semibold text-brand-ink transition hover:bg-brand-hover disabled:opacity-60"
             >
               Assess this photo
             </button>
@@ -120,7 +167,7 @@ export default function UploadCard({
               type="button"
               disabled={disabled}
               onClick={reset}
-              className="rounded-full border border-slate-300 bg-white px-6 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
+              className="rounded-full border border-line bg-card px-6 py-2.5 text-sm font-semibold text-ink transition hover:bg-surface-2 disabled:opacity-60"
             >
               Choose another
             </button>
@@ -129,7 +176,7 @@ export default function UploadCard({
       )}
 
       {error && (
-        <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
+        <p className="mt-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">{error}</p>
       )}
     </div>
   );
