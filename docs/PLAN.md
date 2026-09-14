@@ -65,16 +65,17 @@ public/demo/                      A   (cached demo photos)
 
 ---
 
-## Phase −1 — Today, before anything else
+## Phase −1 — Model access ✅ DONE
 
-**Confirm you can make a vision model call.** Not "we have an Azure subscription" —
-an actual Azure OpenAI resource, in a region with a vision-capable deployment, with quota,
-that you can `curl`. This is the most common way a hackathon loses a day, and Phase 1
-discovers it far too late.
+**Verified working.** See [`MODEL-ACCESS.md`](MODEL-ACCESS.md) for the confirmed config
+and five findings that change the build — most importantly that **image resize changes
+the score**, so the resize parameters must be fixed and shared between `eval/` and
+production before either stream tunes anything.
 
-If it isn't ready, don't wait on it. Keep `client.ts` provider-agnostic behind one
-interface so local development runs on an OpenAI or GitHub Models key and you swap the
-provider at deploy time. The rest of the plan is unaffected.
+Auth is Entra ID (no API keys), `gpt-4o` on `api-version=2024-10-21`, 4–8 s per call.
+
+Keep `client.ts` provider-agnostic anyway so local development can fall back to an
+OpenAI or GitHub Models key if the Azure resource becomes unavailable.
 
 ---
 
