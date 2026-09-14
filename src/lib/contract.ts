@@ -40,22 +40,36 @@ export const MIN_SCORABLE_AUS = 3;
  * not in scoring.ts, because `agreement` below is meaningless unless A and B
  * agree on how it was computed.
  *
- *  1. STATUS FIRST. Take the modal top-level status across the N runs. If
- *     'rejected' wins, use the modal rejectionReason and stop. If 'assessed'
+ *  1. DISCARD FAILED RUNS. A run that threw, timed out, or failed schema
+ *     validation does not vote. It is not evidence of anything.
+ *  2. STATUS FIRST. Take the modal top-level status across the surviving runs.
+ *     If 'rejected' wins, use the modal rejectionReason and stop. If 'assessed'
  *     wins, aggregate action units over ONLY the runs that returned
  *     'assessed' — never mix a rejected run's (absent) AUs into the vote.
- *  2. PER-AU MODE. For each action unit, the winning score is the mode across
+ *     On a STATUS TIE (e.g. 1 assessed / 1 rejected after one run failed),
+ *     REJECT, using the rejecting run's reason. Asserting a score off a single
+ *     run is exactly what sampling exists to prevent, and refusing is a
+ *     designed outcome here rather than a failure.
+ *  3. PER-AU MODE. For each action unit, the winning score is the mode across
  *     the contributing runs. An AU is unscorable (null) when it came back null
  *     in AT LEAST HALF of them.
- *  3. TIES GO HIGH. `1, 2, null` has no mode. On any tie, take the HIGHER
+ *  4. TIES GO HIGH. `1, 2, null` has no mode. On any tie, take the HIGHER
  *     score and attach a 'low_agreement' caveat. Under-calling pain is the
  *     worse error for a screening tool that tells someone to see a vet.
- *  4. EVIDENCE IS NOT MERGED. Keep the `evidence` (and `notScorableReason`)
+ *  5. EVIDENCE IS NOT MERGED. Keep the `evidence` (and `notScorableReason`)
  *     string from the FIRST contributing run that voted the winning score.
  *     Never concatenate or summarise prose across runs — it reads like the
  *     model hedging and it is not what any single run actually observed.
  */
 export const SAMPLES_PER_ASSESSMENT = 3;
+
+/**
+ * Below this many CONTRIBUTING runs there is no ensemble, just an expensive
+ * single call — the exact failure mode SAMPLES_PER_ASSESSMENT exists to avoid.
+ * If fewer than this survive, return a retryable { status: 'error' } rather
+ * than a confident-looking assessment built on one sample.
+ */
+export const MIN_CONTRIBUTING_SAMPLES = 2;
 
 /**
  * Band cut-offs on the normalized 0..1 score. PRODUCT decision, not from the
@@ -89,8 +103,12 @@ export interface ActionUnitAssessment {
   evidence: string; // what was observed, in plain language
 
   /**
-   * How many of the SAMPLES_PER_ASSESSMENT runs backed the winning score.
-   * Range 1..SAMPLES_PER_ASSESSMENT.
+   * How many of the contributing runs backed the winning score.
+   *
+   * THE DENOMINATOR IS `Assessment.meta.samples`, NOT SAMPLES_PER_ASSESSMENT.
+   * Those differ whenever a run fails or is dropped by the status vote, so A
+   * must render "{agreement} of {meta.samples} runs agreed" and never hardcode
+   * 3. Range is 1..meta.samples.
    *
    * This REPLACED the model's own `confidence` field, deliberately. The model
    * returns a number that is byte-identical across repeated runs of the same
@@ -127,7 +145,13 @@ export interface Caveat {
 export interface AssessmentMeta {
   model: string; // e.g. "gpt-4.1"
   promptVersion: string; // e.g. "v0" — matches docs/PROMPT-V0.md
-  samples: number; // how many runs actually contributed (see SAMPLES_PER_ASSESSMENT)
+  /**
+   * Number of runs that actually CONTRIBUTED to the action unit vote — i.e.
+   * survived, and returned 'assessed' after the status vote. NOT the number of
+   * calls attempted (that is SAMPLES_PER_ASSESSMENT). This is the denominator
+   * for every `agreement` value in this assessment, and is >= MIN_CONTRIBUTING_SAMPLES.
+   */
+  samples: number;
 }
 
 /**
