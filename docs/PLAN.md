@@ -67,15 +67,29 @@ public/demo/                      A   (cached demo photos)
 
 ## Phase −1 — Model access ✅ DONE
 
-**Verified working.** See [`MODEL-ACCESS.md`](MODEL-ACCESS.md) for the confirmed config
-and findings that change the build — most importantly that **`temperature: 0` is not
-deterministic**, so the eval set must run each image several times and the demo must
-serve cached responses.
+**Verified working**, against our own dedicated Azure resource. See
+[`MODEL-ACCESS.md`](MODEL-ACCESS.md) for the confirmed config and the findings that
+change the build, and [`PROMPT-V0.md`](PROMPT-V0.md) for the exact prompt and schema
+that produced them — start from that file, not a blank page.
 
-Auth is Entra ID (no API keys), `gpt-4o` on `api-version=2024-10-21`, 4–8 s per call.
+Config: Entra ID auth (no API keys), **`gpt-4.1`** on `api-version=2025-01-01-preview`,
+`json_schema` + `strict: true`, 5–7 s per call.
+
+Three findings materially change what Phase 2 has to build:
+
+- **`temperature: 0` is not deterministic.** The eval set must run each image several
+  times, and the demo must serve cached responses.
+- **Therefore `assessImage` samples 3× and takes the mode per action unit** (see the
+  contract note below). This is not optional polish — it's what makes abstention usable.
+- **Do not display `confidence`.** The number the model returns is a fixed per-feature
+  prior, not a per-photo judgement. Band by the paper's published reliability instead.
 
 Keep `client.ts` provider-agnostic anyway so local development can fall back to an
 OpenAI or GitHub Models key if the Azure resource becomes unavailable.
+
+> **Both of us need access.** The resource is AAD-only; ask for the
+> **Cognitive Services OpenAI User** role, then `az login` and you're done. There is no
+> key to copy around, and nothing secret to put in `.env.local` beyond the endpoint name.
 
 ---
 
@@ -110,13 +124,28 @@ export const ANALGESIA_THRESHOLD = 0.39;
  */
 export const MIN_SCORABLE_AUS = 3;
 
+/**
+ * The model is not deterministic even at temperature 0, and its decision to abstain
+ * fires only ~1 run in 3. So sample N times and take the mode per action unit; an AU
+ * counts as unscorable when it returns null in at least half the samples.
+ * The calls run in parallel, so this costs tokens, not wall-clock. See MODEL-ACCESS.md #3.
+ */
+export const SAMPLES_PER_ASSESSMENT = 3;
+
 export interface ActionUnitAssessment {
   id: ActionUnitId;
   label: string;                  // "Ear position"
   score: 0 | 1 | 2 | null;        // null = not possible to score (FGS-legitimate)
   notScorableReason?: string;     // required when score === null
   evidence: string;               // what was observed, in plain language
-  confidence: number;             // 0..1
+
+  /**
+   * How many of the SAMPLES_PER_ASSESSMENT runs agreed with the winning score.
+   * Show this instead of the model's own `confidence`, which is a fixed per-feature
+   * prior rather than a per-photo judgement (MODEL-ACCESS.md #2). Unanimous vs. 2-of-3
+   * is a real, honest signal — and it's ours, not the model's self-report.
+   */
+  agreement: number;              // 1..SAMPLES_PER_ASSESSMENT
 }
 
 export type RejectionReason =
@@ -124,7 +153,7 @@ export type RejectionReason =
   | 'multiple_cats'   | 'too_few_scorable_aus';
 
 export interface Caveat {
-  kind: 'brachycephalic' | 'dark_coat' | 'acute_pain_only' | 'low_confidence';
+  kind: 'brachycephalic' | 'dark_coat' | 'acute_pain_only' | 'low_agreement';
   message: string;
 }
 
@@ -164,24 +193,30 @@ it breaks the other person's build.
   `AssessResult`. Keep it thin. Validate size/MIME here.
 
 ### Person B
-- Get Azure OpenAI vision working at all — one hardcoded image, print the raw response.
-  Do this first; credential setup is where hackathons die.
-- Draft `prompt.ts` v1: the five AUs, 0/1/2 anchors, and an explicit instruction that
-  `null` is a valid, encouraged answer when a feature isn't clearly visible.
-- `schema.ts` — Zod schema matching the model's expected JSON. Use structured outputs /
-  JSON mode. On parse failure, retry once, then reject cleanly.
-- `client.ts` — `temperature: 0`, sensible timeout, typed error handling.
+- **Most of the original Phase 1 is already done** — see `MODEL-ACCESS.md` and
+  `PROMPT-V0.md`. Credentials work, the prompt works, the schema works. Don't re-derive it.
+- Port `PROMPT-V0.md` into `prompt.ts` and `schema.ts` verbatim, then get one hardcoded
+  image running through it from inside the Next.js app rather than a scratch script.
+- `client.ts` — AAD token acquisition (`DefaultAzureCredential`), `temperature: 0`,
+  sensible timeout, typed error handling. On schema-parse failure, retry once, then
+  reject cleanly.
+- **Implement the 3× sample-and-vote in `score.ts`.** Fire the calls in parallel, take
+  the mode per AU, and record `agreement`. This is the real Phase 1 work now, and
+  everything about how trustworthy the demo feels depends on it.
 
-**Checkpoint 1:** A has a working upload→mock→render loop. B has real JSON coming back
-from the model. Neither has touched the other's files.
+**Checkpoint 1:** A has a working upload→mock→render loop. B has voted, aggregated JSON
+coming back from the model. Neither has touched the other's files.
 
 ---
 
 ## Phase 2 — Parallel. Build the substance.
 
 ### Person A
-- `ActionUnitCard` — label, score chip (0/1/2 or "Not assessable"), evidence text,
-  confidence indicator.
+- `ActionUnitCard` — label, score chip (0/1/2 or "Not assessable"), evidence text, and
+  an **agreement** indicator ("all 3 runs agreed" / "2 of 3").
+- **Do not render the model's `confidence` field.** It's a fixed per-feature prior, not a
+  per-photo judgement (`MODEL-ACCESS.md` #2). Showing it would fake exactly the precision
+  we're claiming to be honest about. Use `agreement` instead — we computed that ourselves.
 - **Weight the visual hierarchy by reliability.** In the original validation, inter-rater
   agreement was: head 0.90, ears 0.87, eyes 0.86, muzzle 0.63, whiskers 0.55. Present
   muzzle and whiskers as lower-confidence by default. This is a real finding, not decoration.
