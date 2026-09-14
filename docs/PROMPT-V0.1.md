@@ -262,6 +262,26 @@ v0 earned "verified" by being run. This must do the same:
    any change there is an unintended side effect.
 6. Only then update `MODEL-ACCESS.md` and flip the header of this file to verified.
 
+### Preliminary observations (Phase 1 wiring — NOT verification) ⚠️
+
+Recorded while smoke-testing the real pipeline end to end. These are **three stock demo
+photos of visibly comfortable cats**, not the fixture set, and no v0 baseline was re-run
+alongside them, so **none of the six steps above are satisfied.** This file stays UNVERIFIED.
+
+- **The null rate collapsed to zero.** All three photos returned `scorableCount: 5` — every
+  AU scored, on every run. That is the exact outcome checklist step 2 says to rule out. It
+  may be legitimate (all three are sharp, well-lit, front-facing photos where all five AUs
+  genuinely are visible) or it may mean v0.1 still under-abstains. **Deciding this needs the
+  hard cases: dark coats, profile angles, partial occlusion, motion blur.** Until then, treat
+  the abstention behaviour as untested rather than fixed.
+- **`temperature: 0` is not deterministic here.** The same photo scored `ears: 0 / whiskers: 1`
+  in one assessment and `ears: 1 / whiskers: 0` in another, and per-AU `agreement` of 2-of-3
+  was common. The normalized score happened to match both times, but that is luck, not
+  stability. This is direct evidence that the 3-sample ensemble is load-bearing rather than
+  belt-and-braces — a single call would be visibly noisier.
+- **The rejection path still works** (checklist step 5): a non-cat image returned
+  `no_cat_detected` with retake tips, so the v0.1 edits did not disturb gating.
+
 ---
 
 ## Proposed extension — still NOT VERIFIED ⚠️
