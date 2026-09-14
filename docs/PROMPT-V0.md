@@ -1,5 +1,11 @@
 # FGS Prompt v0 — verified
 
+> ⚠️ **SUPERSEDED by [`PROMPT-V0.1.md`](./PROMPT-V0.1.md).** Retained because every number in
+> [`MODEL-ACCESS.md`](./MODEL-ACCESS.md) was produced by *this* prompt, so deleting it would
+> orphan those results. v0.1 corrects a scoring defect in the abstention rule
+> (`FGS-RESEARCH.md` F1) — **build against v0.1, not this.** v0.1 is unverified until its
+> checklist is run, so this file remains the last prompt actually observed to work.
+
 This is the exact prompt and schema that produced every result in
 [`MODEL-ACCESS.md`](./MODEL-ACCESS.md). It is committed so Person B starts from something
 that demonstrably works rather than a blank page. Phase 0 should lift it into
@@ -159,6 +165,12 @@ can currently populate, because the schema returns no information about the cat 
 They exist for good reason: the FGS validation **explicitly excluded brachycephalic
 breeds**, and automated landmarking failed on black cats. Those are real limits on when
 our output means anything, and silently dropping them would overstate what we can claim.
+
+> ❌ **The brachycephalic sentence above is wrong** — see `FGS-RESEARCH.md` F10. P1 says
+> those breeds "were not included", and the one Persian and one Himalayan recruited were
+> dropped **for poor image quality**, not by design; the authors state transferability is
+> unknown. Corrected wording is in [`PROMPT-V0.1.md`](./PROMPT-V0.1.md). Do not ship the
+> sentence above.
 
 Proposed additional top-level property (add `"imageContext"` to `required` as well):
 

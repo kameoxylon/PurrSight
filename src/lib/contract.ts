@@ -144,7 +144,19 @@ export interface Caveat {
  */
 export interface AssessmentMeta {
   model: string; // e.g. "gpt-4.1"
-  promptVersion: string; // e.g. "v0" — matches docs/PROMPT-V0.md
+  /**
+   * Which prompt produced this assessment. The value NAMES ITS OWN SPEC:
+   * `docs/PROMPT-V*.md`, where `*` is this string without the leading "v" —
+   * so "v0.1" documents itself in `docs/PROMPT-V0.1.md`, "v1" in
+   * `docs/PROMPT-V1.md`. Revising the prompt therefore requires NO change to
+   * this file: bump the value B emits and add the matching doc alongside it.
+   *
+   * Deliberately NOT a pointer to "the latest prompt". It is a measurement
+   * label: it must name the prompt that actually generated THIS result, so any
+   * eval number can be traced back to the exact wording behind it. Two results
+   * carrying different promptVersion values are not comparable.
+   */
+  promptVersion: string;
   /**
    * Number of runs that actually CONTRIBUTED to the action unit vote — i.e.
    * survived, and returned 'assessed' after the status vote. NOT the number of
