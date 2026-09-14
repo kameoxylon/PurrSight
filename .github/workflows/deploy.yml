@@ -1,0 +1,54 @@
+name: Deploy to Azure App Service
+
+# Deploys PurrSight (Next.js standalone) to Azure App Service on every push to
+# main, and on manual trigger. Uses a publish profile stored as a repo secret
+# (AZURE_WEBAPP_PUBLISH_PROFILE) so no Azure login is needed in CI.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: purrsight   # must match the App Service name in Azure
+  NODE_VERSION: "20"
+
+# Avoid overlapping deploys stepping on each other.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (Next.js standalone)
+        run: npm run build
+
+      # Next's standalone output at .next/standalone does NOT include the
+      # static assets or the public/ folder — they must be copied in next to
+      # server.js so the deployed app can serve them.
+      - name: Assemble standalone bundle
+        run: |
+          cp -r public .next/standalone/public
+          mkdir -p .next/standalone/.next/static
+          cp -r .next/static/. .next/standalone/.next/static/
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: .next/standalone
