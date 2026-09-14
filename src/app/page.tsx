@@ -82,9 +82,9 @@ export default function Home() {
             <div className="flex flex-wrap justify-center gap-3">
               <button
                 onClick={() => downloadResultImage(resultRef.current)}
-                className="inline-flex items-center gap-1.5 rounded-full bg-brand px-6 py-2.5 text-sm font-semibold text-brand-ink transition hover:bg-brand-hover"
+                className="rounded-full bg-brand px-6 py-2.5 text-sm font-semibold text-brand-ink transition hover:bg-brand-hover"
               >
-                <span aria-hidden>⬇️</span> Download image
+                Download results
               </button>
               <button
                 onClick={reset}

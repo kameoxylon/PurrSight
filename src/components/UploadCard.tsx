@@ -3,12 +3,11 @@
 import { useCallback, useRef, useState } from 'react';
 import Image from 'next/image';
 import { prepareImage, UnsupportedImageError } from '@/lib/prepare-image';
-import CatHead from './CatHead';
 
 const DEMOS = [
-  { src: '/demo/tabby.svg', label: 'Tabby' },
-  { src: '/demo/grey.svg', label: 'Grey' },
-  { src: '/demo/calico.svg', label: 'Calico' },
+  { src: '/demo/tabby.jpg', label: 'Tabby' },
+  { src: '/demo/grey.jpg', label: 'Grey' },
+  { src: '/demo/calico.jpg', label: 'Calico' },
 ];
 
 /**
@@ -75,7 +74,7 @@ export default function UploadCard({
         if (!res.ok) throw new Error('fetch failed');
         const raw = await res.blob();
         const name = src.split('/').pop() || 'demo';
-        const file = new File([raw], name, { type: raw.type || 'image/svg+xml' });
+        const file = new File([raw], name, { type: raw.type || 'image/jpeg' });
         await handleFile(file);
       } catch {
         setError('Could not load that sample photo. Please try uploading your own.');
@@ -115,7 +114,9 @@ export default function UploadCard({
               dragOver ? 'border-brand bg-brand/10' : 'border-line hover:border-brand/60'
             } disabled:opacity-60`}
           >
-            <CatHead className="h-16 w-16" />
+            <span className="text-5xl" aria-hidden>
+              🐱
+            </span>
             <span className="font-semibold text-ink">
               {preparing ? 'Preparing photo…' : 'Upload a photo of your cat'}
             </span>
