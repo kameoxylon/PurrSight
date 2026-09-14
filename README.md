@@ -59,7 +59,10 @@ PurrSight will decline to score an image rather than guess:
 
 ## Documentation
 
+- [`docs/LOCAL-SETUP.md`](docs/LOCAL-SETUP.md) — **start here** to run it locally: env vars, Azure auth, and the RBAC role people miss
 - [`docs/PLAN.md`](docs/PLAN.md) — build plan, architecture, and workstream split
+- [`docs/MODEL-ACCESS.md`](docs/MODEL-ACCESS.md) — model choice, why we sample 3× and vote, and what it costs
+- [`docs/FGS-RESEARCH.md`](docs/FGS-RESEARCH.md) — the research the scoring is grounded in, and its known limits
 
 ## Attribution
 
