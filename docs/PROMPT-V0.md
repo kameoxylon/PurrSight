@@ -148,6 +148,53 @@ future model actually calibrates — but **do not render it in the UI.** See fin
 
 ---
 
+## Proposed v0.1 extension — NOT YET VERIFIED ⚠️
+
+Everything above this line was run against the model and observed to work. **This section
+was not.** It is written down so it isn't lost, and must be tested before anything depends
+on it. Do not fold it into the verified schema until it has been run 3× like everything else.
+
+`contract.ts` declares two caveat kinds — `brachycephalic` and `dark_coat` — that nothing
+can currently populate, because the schema returns no information about the cat itself.
+They exist for good reason: the FGS validation **explicitly excluded brachycephalic
+breeds**, and automated landmarking failed on black cats. Those are real limits on when
+our output means anything, and silently dropping them would overstate what we can claim.
+
+Proposed additional top-level property (add `"imageContext"` to `required` as well):
+
+```json
+"imageContext": {
+  "type": ["object", "null"],
+  "additionalProperties": false,
+  "required": ["faceShape", "coatIsDark"],
+  "properties": {
+    "faceShape": { "type": "string", "enum": ["typical", "flat_faced", "unclear"] },
+    "coatIsDark": { "type": "boolean" }
+  }
+}
+```
+
+Proposed prompt addition:
+
+```text
+Also report "imageContext":
+- faceShape: "flat_faced" for brachycephalic cats (Persian, Himalayan, Exotic
+  Shorthair, British Shorthair and similar flattened facial structures),
+  "typical" otherwise, "unclear" if you cannot tell.
+- coatIsDark: true if the cat's face is predominantly black or very dark.
+This is NOT part of the pain score. It records conditions under which the Feline
+Grimace Scale is known to be less reliable.
+```
+
+Then map `flat_faced` → `brachycephalic` caveat and `coatIsDark` → `dark_coat` caveat.
+
+**What to watch for when testing it:** whether asking for breed/coat observations
+perturbs the action unit scores. It shouldn't — but that's an assumption, and the whole
+point of this document is that assumptions about this model have been wrong twice already.
+Run the existing photos with and without the extension and compare.
+
+---
+
 ## Attribution
 
 Action unit definitions are derived from the Feline Grimace Scale: Evangelista et al.,

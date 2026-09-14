@@ -93,15 +93,17 @@ OpenAI or GitHub Models key if the Azure resource becomes unavailable.
 
 ---
 
-## Phase 0 — Together, ~90 minutes. Nothing parallel until this lands.
+## Phase 0 — Together, ~90 minutes. ✅ DONE
 
-Do this on one machine, screen-shared. It is the contract everything else depends on.
+Done on one machine, screen-shared. It is the contract everything else depends on.
 
 1. Scaffold: `npx create-next-app@latest . --typescript --app --tailwind --eslint`
 2. **Install every dependency you expect to need, now, in one commit** — `zod`, the model
    SDK, `vitest`, and any upload helper. `package.json` and the lockfile are the one pair
    of files both people will otherwise touch daily, and lockfile conflicts are miserable
    to resolve. Adding a dep later is fine; just announce it and merge to `main` promptly.
+   *(`@azure/identity` was added later for keyless Azure auth —
+   `getBearerTokenProvider` lives there. Run `npm install` after pulling.)*
 3. Write `src/lib/contract.ts` together (draft below).
 4. Write `src/lib/fixtures.ts` — four hardcoded results: healthy cat, painful cat,
    rejected image, partial-scorable (whiskers not visible).
@@ -109,70 +111,31 @@ Do this on one machine, screen-shared. It is the contract everything else depend
 6. Confirm `npm run dev` runs on both machines.
 7. **Commit and push to `main` before anyone branches.**
 
-### Draft contract
+### The contract — live, and FROZEN
 
-```ts
-export const ACTION_UNITS = ['ears', 'eyes', 'muzzle', 'whiskers', 'head'] as const;
-export type ActionUnitId = (typeof ACTION_UNITS)[number];
+**Phase 0 is done.** The contract lives in **[`src/lib/contract.ts`](../src/lib/contract.ts)**.
+Read it there, not here. A second copy in this document would drift, and a drifting copy
+of a frozen contract is worse than no copy at all.
 
-/** Validated rescue-analgesia cut-off from Evangelista et al. 2019. Do not tune. */
-export const ANALGESIA_THRESHOLD = 0.39;
+It was revised once after this document's Phase −1 findings merged — Phase 0 landed
+first and had encoded a superseded draft. The four changes worth knowing before you open
+the file:
 
-/**
- * Our own product decision, NOT from the paper. Normalizing over one or two action
- * units produces a number too noisy to show a user, so we refuse instead. Tune freely.
- */
-export const MIN_SCORABLE_AUS = 3;
+- **`confidence` is gone. `agreement` replaced it.** The model's own confidence number is
+  a fixed per-feature prior, not a per-photo judgement (`MODEL-ACCESS.md` #2). `agreement`
+  counts how many runs backed the winning score. **Its denominator is `meta.samples`, not
+  a hardcoded 3** — runs can fail or be dropped by the status vote.
+- **`SAMPLES_PER_ASSESSMENT = 3`, `MIN_CONTRIBUTING_SAMPLES = 2`, and five vote-resolution
+  rules.** "Take the mode" was under-specified in ways `scoring.ts` cannot guess: how
+  failed runs are discarded, that status is voted before action units, what happens on a
+  status tie, how score ties break, and which run's `evidence` prose survives.
+- **`Assessment.meta`** records model, prompt version and contributing sample count.
+  Finding #6: `gpt-4.1` and `gpt-4o` score the same photo differently, so the model ID is
+  part of the measurement and an eval number is meaningless without it.
+- **Caveat `low_confidence` → `low_agreement`.**
 
-/**
- * The model is not deterministic even at temperature 0, and its decision to abstain
- * fires only ~1 run in 3. So sample N times and take the mode per action unit; an AU
- * counts as unscorable when it returns null in at least half the samples.
- * The calls run in parallel, so this costs tokens, not wall-clock. See MODEL-ACCESS.md #3.
- */
-export const SAMPLES_PER_ASSESSMENT = 3;
-
-export interface ActionUnitAssessment {
-  id: ActionUnitId;
-  label: string;                  // "Ear position"
-  score: 0 | 1 | 2 | null;        // null = not possible to score (FGS-legitimate)
-  notScorableReason?: string;     // required when score === null
-  evidence: string;               // what was observed, in plain language
-
-  /**
-   * How many of the SAMPLES_PER_ASSESSMENT runs agreed with the winning score.
-   * Show this instead of the model's own `confidence`, which is a fixed per-feature
-   * prior rather than a per-photo judgement (MODEL-ACCESS.md #2). Unanimous vs. 2-of-3
-   * is a real, honest signal — and it's ours, not the model's self-report.
-   */
-  agreement: number;              // 1..SAMPLES_PER_ASSESSMENT
-}
-
-export type RejectionReason =
-  | 'no_cat_detected' | 'face_not_visible' | 'image_quality'
-  | 'multiple_cats'   | 'too_few_scorable_aus';
-
-export interface Caveat {
-  kind: 'brachycephalic' | 'dark_coat' | 'acute_pain_only' | 'low_agreement';
-  message: string;
-}
-
-export interface Assessment {
-  actionUnits: ActionUnitAssessment[];
-  scorableCount: number;
-  rawScore: number;               // sum of scored AUs
-  maxPossible: number;            // 2 * scorableCount
-  normalizedScore: number;        // rawScore / maxPossible
-  aboveThreshold: boolean;        // normalizedScore > 0.39
-  band: 'minimal' | 'possible' | 'likely';
-  caveats: Caveat[];
-  recommendation: string;
-}
-
-export type AssessResult =
-  | { status: 'assessed'; assessment: Assessment }
-  | { status: 'rejected'; reason: RejectionReason; message: string; retakeTips: string[] };
-```
+Changing any of it still requires both people to agree, and now breaks a real build
+rather than a hypothetical one.
 
 Once this is on `main`, **freeze it**. Any change requires both people to agree, because
 it breaks the other person's build.
