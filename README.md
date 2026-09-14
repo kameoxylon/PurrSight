@@ -34,9 +34,9 @@ Our goal is simple:
 
 > Help humans better understand animals that cannot speak for themselves.
 
-## What We Built
+## What We Plan to Build
 
-PurrSight is an AI-assisted cat pain assessment application that:
+PurrSight will be an AI-assisted cat pain assessment application that:
 
 - Accepts an uploaded photo of a cat
 - Detects and analyzes facial features relevant to the Feline Grimace Scale
@@ -45,17 +45,17 @@ PurrSight is an AI-assisted cat pain assessment application that:
 - Explains the observations that contributed to the assessment
 - Provides recommendations on potential next steps
 
-The application focuses heavily on **explainability**.
+The application will focus heavily on **explainability**.
 
-Instead of producing a black-box prediction, PurrSight highlights the factors that influenced the assessment, including ear posture, eye narrowing, muzzle tension, whisker positioning, and general head posture. Users can understand not only the result, but also *why* the application produced that result.
+Instead of producing a black-box prediction, PurrSight will highlight the factors that influenced the assessment, including ear posture, eye narrowing, muzzle tension, whisker positioning, and general head posture. Users will understand not only the result, but also *why* the application produced that result.
 
-### Built to know its limits
+### Designed to know its limits
 
-PurrSight declines to score an image rather than guess:
+PurrSight will decline to score an image rather than guess:
 
-- If no cat, no clearly visible face, or inadequate image quality is detected, it asks for a better photo instead of producing a number.
-- Individual features that aren't clearly visible are marked *not assessable* and excluded from the score, following the FGS's own scoring method.
-- Results surface the known limits of the underlying research — the scale was validated on **acute** pain, and its validation study did not include flat-faced (brachycephalic) breeds.
+- If no cat, no clearly visible face, or inadequate image quality is detected, it will ask for a better photo instead of producing a number.
+- Individual features that aren't clearly visible will be marked *not assessable* and excluded from the score, following the FGS's own scoring method.
+- Results will surface the known limits of the underlying research — the scale was validated on **acute** pain, and its validation study did not include flat-faced (brachycephalic) breeds.
 
 ## Documentation
 
