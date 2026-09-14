@@ -262,6 +262,69 @@ v0 earned "verified" by being run. This must do the same:
    any change there is an unintended side effect.
 6. Only then update `MODEL-ACCESS.md` and flip the header of this file to verified.
 
+### Abstention probe (Phase 1 wiring — narrows step 2, does NOT satisfy it) ⚠️
+
+The first pass over three clean demo photos returned `scorableCount: 5` every time — a
+**zero null rate**, which is exactly the outcome checklist step 2 says to rule out. Rather
+than guess whether that was legitimate, it was tested directly with a controlled ablation:
+one photo (`public/demo/tabby.jpg`), degraded one way at a time, so nothing is confounded.
+
+| Variant | Result | Correct? |
+|---|---|---|
+| Baseline | 5/5 scorable, 0.20 minimal | yes — all AUs genuinely visible |
+| Muzzle + whiskers blacked out | **`muzzle: null`, `whiskers: null`**, 3/5 scorable, unanimous | **yes — the exact right answer** |
+| Ears blacked out | `rejected: image_quality` | acceptable (gated the whole image instead of nulling one AU) |
+| Heavy blur | `rejected: image_quality` | yes |
+| Downscaled to 96px / 192px wide | `rejected: image_quality` | yes — whiskers are not resolvable at all at 96px |
+| Downscaled to 384px wide | 5/5 scorable, 0.30 possible | plausible — whiskers are visible again |
+| Underexposed, brightness 0.18 | 5/5 scorable, **whiskers 0 → 1** | **questionable — see below** |
+| Underexposed, brightness 0.10 | 5/5 scorable, whiskers 0 → 1 | questionable |
+| Underexposed, brightness 0.05 (near-black) | 5/5 scorable, whiskers 0 → 1 | questionable |
+
+**The zero null rate on clean photos was legitimate, not under-abstention.** Occlusion
+produces per-AU `null`s — unanimously, on exactly the two covered AUs — and global
+degradation trips the whole-image `image_quality` rejection. Neither blur nor a 96px
+downscale produced an invented score.
+
+**Underexposure is the exception, and it is the one that matters.** Across all three
+darkness levels the model never abstained on a single AU and never rejected the image,
+even at brightness 0.05, where the face is barely legible. The per-AU scores did not stay
+still: **whiskers moved 0 → 1 unanimously at every darkness level**, while ears moved
+1 → 0. The normalized score stayed at 0.20 purely because those two shifts cancelled —
+an accident, not stability.
+
+Two reasons to take this seriously rather than filing it as a synthetic edge case:
+
+1. **The drift on whiskers is upward**, which is the over-scoring direction `PLAN.md`
+   names as the failure mode that destroys trust fastest.
+2. **It lands exactly where the research says it would.** Whiskers are the weakest AU in
+   six studies (`FGS-RESEARCH.md`, ICC 0.35–0.55, caregiver agreement 0.37, owner 0.47),
+   and P9 reports image-based assessment is *worse* than real-time specifically for
+   muzzle and whiskers. PurrSight is image-only by construction.
+
+So the accurate claim is narrower than "it does not confabulate": **v0.1 abstains in
+response to occlusion, not in response to low signal.** A feature that is covered gets a
+`null`; a feature that is merely too dark to read gets a confident score.
+
+This **narrows** step 2 but does not close it. It is one cat and synthetic degradation,
+and a brightness multiplier is not the same thing as a genuinely black-coated cat
+photographed in a dim room — that comparison needs real photos. **This file stays
+UNVERIFIED** and the six steps above remain unrun. Add underexposed and dark-coat cases
+to the eval set, and check the whisker distribution specifically (checklist step 4).
+
+Two further observations from the same runs:
+
+- **`temperature: 0` is not deterministic here.** The same photo scored `ears: 0 / whiskers: 1`
+  in one assessment and `ears: 1 / whiskers: 0` in another, and per-AU `agreement` of 2-of-3
+  was common. The normalized score happened to match, but that is luck, not stability —
+  direct evidence that the 3-sample ensemble is load-bearing rather than belt-and-braces.
+- **Azure content safety can 400 a legitimate cat photo.** The 48px variant was refused with
+  *"your input image may contain content that is not allowed by our content safety system"*.
+  A heavily pixelated cat is not unsafe, so this is a false positive on low-quality input —
+  and the pipeline currently maps it to `internal` / HTTP 502 / `retryable: false`
+  ("Something went wrong on our end"), which sends a user with a bad photo down a dead end
+  instead of telling them to retake it. See the open item in `PLAN.md`.
+
 ---
 
 ## Proposed extension — still NOT VERIFIED ⚠️

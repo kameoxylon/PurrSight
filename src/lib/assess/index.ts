@@ -1,27 +1,101 @@
 /**
- * PurrSight — assessImage() ENTRY POINT (Phase 0 STUB)
+ * PurrSight — assessImage() ENTRY POINT
  * ---------------------------------------------------------------------------
- * This is the ONLY thing A imports from lib/assess/. B replaces the body in
- * Phase 2 with the real prompt -> model -> schema -> gating -> scoring
- * pipeline. The SIGNATURE (AssessImageFn) is frozen in contract.ts and must
- * not change.
+ * The ONLY thing A imports from lib/assess/. The signature is frozen in
+ * contract.ts (AssessImageFn) and must not change.
  *
- * Contract guarantee (see contract.ts): this function NEVER throws. Every
- * failure returns a { status: 'error' } result so A has exactly one shape to
- * handle.
+ * The pipeline, end to end:
  *
- * Until Phase 2, it returns a fixture after a short delay so A can build the
- * whole app against realistic timing. Flip STUB_RESULT to exercise each UI
- * state (healthy / painful / rejected / partial / error).
+ *   image -> SAMPLES_PER_ASSESSMENT parallel model calls   (client.ts)
+ *         -> per-call schema + semantic validation         (schema.ts)
+ *         -> discard failed runs                           (VOTE RULE 1)
+ *         -> vote, score, gate, caveat                     (scoring.ts)
+ *         -> AssessResult
+ *
+ * The samples run in PARALLEL, so three calls cost about one call of latency
+ * (5-8s) rather than three.
+ *
+ * CONTRACT GUARANTEE: this function NEVER throws. Every failure — bad env, a
+ * dead endpoint, nonsense from the model, a bug in here — comes back as
+ * { status: 'error' } so A has exactly one shape to handle.
  */
-import type { AssessImageFn } from '../contract';
-import { allFixtures } from '../fixtures';
+import {
+  MIN_CONTRIBUTING_SAMPLES,
+  SAMPLES_PER_ASSESSMENT,
+  type AssessErrorKind,
+  type AssessImageFn,
+  type AssessResult,
+} from '../contract';
+import { getModelName, runSingleAssessment, type RunOutcome } from './client';
+import { PROMPT_VERSION } from './prompt';
+import {
+  EMPTY_USAGE,
+  addUsage,
+  estimateCostUsd,
+  formatPerThousand,
+  formatUsd,
+  type TokenUsage,
+} from './pricing';
+import { aggregate } from './scoring';
+import type { ValidatedResponse } from './schema';
 
-const STUB_DELAY_MS = 1500; // real calls are 3–8s; A designs the loading state for ~8s.
-const STUB_RESULT: keyof typeof allFixtures = 'healthy';
+/**
+ * User-facing copy per failure kind. Deliberately free of provider detail:
+ * contract.ts requires `message` be safe to render verbatim.
+ */
+const ERROR_COPY: Record<AssessErrorKind, { message: string; retryable: boolean }> = {
+  timeout: {
+    message: 'The assessment took too long to complete. Please try again.',
+    retryable: true,
+  },
+  rate_limit: {
+    message: 'We are handling a lot of photos right now. Please wait a moment and try again.',
+    retryable: true,
+  },
+  upstream_unavailable: {
+    message: 'The assessment service is temporarily unavailable. Please try again shortly.',
+    retryable: true,
+  },
+  bad_model_response: {
+    message: 'We could not get a reliable reading on that photo. Please try again.',
+    retryable: true,
+  },
+  internal: {
+    message: 'Something went wrong on our end. Please try again.',
+    retryable: false,
+  },
+};
 
-export const assessImage: AssessImageFn = async (input) => {
-  // Cheap sanity checks so the stub behaves plausibly for A's route wiring.
+/**
+ * When too few samples survive, the failures are all we have to explain why.
+ * Report the most common kind; on a tie prefer the most specific and
+ * actionable one, so "you are rate limited" beats a vague "internal".
+ */
+const KIND_PRECEDENCE: AssessErrorKind[] = [
+  'rate_limit',
+  'timeout',
+  'upstream_unavailable',
+  'bad_model_response',
+  'internal',
+];
+
+function dominantKind(failures: AssessErrorKind[]): AssessErrorKind {
+  if (failures.length === 0) return 'bad_model_response';
+
+  const counts = new Map<AssessErrorKind, number>();
+  for (const kind of failures) counts.set(kind, (counts.get(kind) ?? 0) + 1);
+
+  return [...counts.entries()].sort(
+    ([aKind, aCount], [bKind, bCount]) =>
+      bCount - aCount || KIND_PRECEDENCE.indexOf(aKind) - KIND_PRECEDENCE.indexOf(bKind),
+  )[0][0];
+}
+
+function toError(kind: AssessErrorKind): AssessResult {
+  return { status: 'error', kind, ...ERROR_COPY[kind] };
+}
+
+export const assessImage: AssessImageFn = async (input): Promise<AssessResult> => {
   if (!input?.imageBase64 || !input?.mimeType) {
     return {
       status: 'error',
@@ -31,6 +105,101 @@ export const assessImage: AssessImageFn = async (input) => {
     };
   }
 
-  await new Promise((r) => setTimeout(r, STUB_DELAY_MS));
-  return allFixtures[STUB_RESULT];
+  // Ties the three concurrent sample logs to one assessment. Without it,
+  // interleaved output from parallel requests is unreadable.
+  const id = Math.random().toString(36).slice(2, 8);
+  const startedAt = Date.now();
+  const sizeKb = Math.round((input.imageBase64.length * 0.75) / 1024);
+  console.info(`[assess] ${id} start | ${input.mimeType} ~${sizeKb}KB | ${SAMPLES_PER_ASSESSMENT} samples`);
+
+  try {
+    // VOTE RULE 1: a run that failed does not get a vote. It is discarded
+    // here and never reaches the scoring layer.
+    const settled = await Promise.allSettled(
+      Array.from({ length: SAMPLES_PER_ASSESSMENT }, (_, i) =>
+        runSingleAssessment(input, `${id}.${i + 1}`),
+      ),
+    );
+
+    const survivors: ValidatedResponse[] = [];
+    const failures: AssessErrorKind[] = [];
+    // Every call is billed, including ones whose result we discard.
+    let billed: TokenUsage = EMPTY_USAGE;
+
+    for (const [i, outcome] of settled.entries()) {
+      if (outcome.status === 'rejected') {
+        // runSingleAssessment returns failures as values, so a rejection here
+        // means a genuine bug rather than a provider problem.
+        console.error(`[assess] ${id}.${i + 1} threw unexpectedly:`, outcome.reason);
+        failures.push('internal');
+        continue;
+      }
+      const run: RunOutcome = outcome.value;
+      billed = addUsage(billed, run.usage);
+      if (run.ok) {
+        survivors.push(run.value);
+      } else {
+        console.error(`[assess] ${id}.${i + 1} failed (${run.kind}):`, run.detail);
+        failures.push(run.kind);
+      }
+    }
+
+    // Report WHY the samples died rather than letting aggregate()'s generic
+    // 'bad_model_response' mask a rate limit or a dead endpoint — A's route
+    // turns these kinds into different HTTP statuses.
+    const result =
+      survivors.length < MIN_CONTRIBUTING_SAMPLES
+        ? toError(dominantKind(failures))
+        : aggregate(survivors, { model: getModelName(), promptVersion: PROMPT_VERSION });
+
+    logOutcome(id, startedAt, survivors.length, billed, result);
+    return result;
+  } catch (err) {
+    // Last line of defence for the never-throws guarantee.
+    console.error(`[assess] ${id} unexpected failure:`, err);
+    return toError('internal');
+  }
 };
+
+/**
+ * The voted result, after the ensemble has been reconciled. Per-AU scores are
+ * logged with their agreement counts, so a surprising number in the UI can be
+ * traced back to whether the runs actually agreed on it.
+ */
+function logOutcome(
+  id: string,
+  startedAt: number,
+  contributing: number,
+  billed: TokenUsage,
+  result: AssessResult,
+): void {
+  const usd = estimateCostUsd(billed);
+  const cached = billed.cachedTokens > 0 ? ` ${billed.cachedTokens}cached` : '';
+  const cost =
+    `${billed.promptTokens}in${cached}/${billed.completionTokens}out ` +
+    `~${formatUsd(usd)} (${formatPerThousand(usd)})`;
+
+  const head =
+    `[assess] ${id} ${result.status} in ${((Date.now() - startedAt) / 1000).toFixed(1)}s ` +
+    `| ${contributing}/${SAMPLES_PER_ASSESSMENT} samples | ${cost}`;
+
+  if (result.status === 'assessed') {
+    const a = result.assessment;
+    const units = a.actionUnits
+      .map((u) => `${u.id}=${u.score ?? 'null'}(${u.agreement}/${a.meta.samples})`)
+      .join(' ');
+    const caveats = a.caveats.map((c) => c.kind).join(',') || 'none';
+    console.info(
+      `${head} | ${units} | ${a.rawScore}/${a.maxPossible} = ${a.normalizedScore.toFixed(2)} ` +
+        `${a.band}${a.aboveThreshold ? ' ABOVE-THRESHOLD' : ''} | scorable ${a.scorableCount}/5 | caveats: ${caveats}`,
+    );
+    return;
+  }
+
+  if (result.status === 'rejected') {
+    console.info(`${head} | reason=${result.reason}`);
+    return;
+  }
+
+  console.error(`${head} | kind=${result.kind} retryable=${result.retryable}`);
+}
