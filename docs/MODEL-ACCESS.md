@@ -56,23 +56,30 @@ AZURE_OPENAI_API_VERSION=2024-10-21
 
 ## Findings that change the build
 
-### 1. Image resolution changes the score 🔴
+### 1. `temperature: 0` is NOT deterministic 🔴
 
-Same photo, two sizes, different results:
+An early run scored `eyes=1`; every subsequent run scored `eyes=0`. Repeating each image
+3× at `temperature: 0`:
 
-| | Size | Tokens | Latency | eyes AU |
+| | Size | Tokens | Latency | 3 runs |
 |---|---|---|---|---|
-| Original | 4524 KB | 1672 | 7.7 s | **1** |
-| Resized to 1024px | 135 KB | 828 | 5.4 s | **0** |
+| Original | 4524 KB | 1672 | 7.7 s | all zeros, 3/3 identical |
+| Resized to 1024px | 135 KB | 828 | 5.4 s | all zeros, 3/3 identical |
 
-Downscaling flipped an action unit. That's a 1-point swing on a 10-point scale from a
-purely cosmetic preprocessing change.
+Both sizes agree, so **resolution did not change the score** — the one-off `eyes=1` was
+run-to-run variance on a borderline feature. `temperature: 0` reduces variance but does
+not eliminate it.
 
-**Consequence:** the resize step is not just an optimization, it's part of the
-measurement. Fix the exact dimensions and JPEG quality early, put them in one shared
-constant, and use the identical path in `eval/` and in production. If Person A tunes the
-client-side resize after Person B has tuned the prompt, the eval results silently stop
-being valid.
+**Consequences:**
+- **The eval set must run each image several times**, not once. A single pass measures
+  noise as much as behaviour, and a borderline AU can flip between runs.
+- **Do not rely on `temperature: 0` for a reproducible demo.** Cache the responses for
+  the demo photos and serve from cache. This was already in `PLAN.md` — now it's load-bearing.
+- Report a borderline result honestly rather than implying precision the model doesn't have.
+
+Resize is still worth doing — 33× smaller payload, half the tokens, 30% faster, and far
+more reliable (see #5). Just pin the parameters in one shared constant and use the same
+path in `eval/` and production, so the eval stays valid if either stream changes them.
 
 ### 2. Confidence values are not calibrated 🟠
 
@@ -120,6 +127,6 @@ than nice-to-have.
 
 ## Sanity check on the happy path
 
-The relaxed test cat scored **0–1 out of 10** (normalized ≤ 0.1), correctly landing well
-under the 0.39 analgesia threshold. Baseline behaviour on a comfortable cat looks right,
-which is the one thing the eval set can actually prove.
+The relaxed test cat scored **0 out of 10** (normalized 0.0), consistently across 6 runs,
+correctly landing well under the 0.39 analgesia threshold. Baseline behaviour on a
+comfortable cat looks right — which is the one thing the eval set can actually prove.

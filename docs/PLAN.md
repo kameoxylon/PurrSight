@@ -68,9 +68,9 @@ public/demo/                      A   (cached demo photos)
 ## Phase −1 — Model access ✅ DONE
 
 **Verified working.** See [`MODEL-ACCESS.md`](MODEL-ACCESS.md) for the confirmed config
-and five findings that change the build — most importantly that **image resize changes
-the score**, so the resize parameters must be fixed and shared between `eval/` and
-production before either stream tunes anything.
+and findings that change the build — most importantly that **`temperature: 0` is not
+deterministic**, so the eval set must run each image several times and the demo must
+serve cached responses.
 
 Auth is Entra ID (no API keys), `gpt-4o` on `api-version=2024-10-21`, 4–8 s per call.
 
