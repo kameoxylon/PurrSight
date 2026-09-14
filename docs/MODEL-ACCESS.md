@@ -7,11 +7,12 @@ Vision assessment works end to end. Recorded here so Person B doesn't re-derive 
 | | |
 |---|---|
 | Auth | **Entra ID (AAD) bearer token — no API keys** |
-| Resource kind | Azure AI Services / Azure OpenAI |
-| Deployment tested | `gpt-4o` (2024-11-20) |
-| API version | `2024-10-21` |
-| Structured output | `response_format: { type: "json_object" }` — works |
-| Latency | 4–8 s per assessment |
+| Resource kind | Azure AI Services (`AIServices`) with a custom subdomain |
+| Region | **`eastus2`** — see the region warning below |
+| Deployment | **`gpt-4.1`** (`2025-04-14`), GlobalStandard |
+| API version | **`2025-01-01-preview`** (required for structured outputs) |
+| Structured output | `response_format: json_schema` with `strict: true` |
+| Latency | 5–7 s per assessment (~1250 prompt tokens) |
 
 Auth token, already working from a normal `az login`:
 
@@ -39,9 +40,21 @@ Put the result in `.env.local` (gitignored):
 
 ```
 AZURE_OPENAI_ENDPOINT=https://<your-resource>.cognitiveservices.azure.com
-AZURE_OPENAI_DEPLOYMENT=gpt-4o
-AZURE_OPENAI_API_VERSION=2024-10-21
+AZURE_OPENAI_DEPLOYMENT=gpt-4.1
+AZURE_OPENAI_API_VERSION=2025-01-01-preview
 ```
+
+> ⚠️ **`westus2` has no Azure OpenAI models at all.** It does not appear even once in
+> Microsoft's region availability table, and a resource created there lists only partner
+> models (Mistral, Cohere, DeepSeek, Llama, Grok) — no `gpt-*`. Use **`eastus2`**,
+> `eastus`, `westus3`, or `southcentralus`. Verify before creating anything.
+
+> ⚠️ **Deleting a Cognitive Services account soft-deletes it.** Recreating with the same
+> name then fails until you purge:
+> `az cognitiveservices account purge -n <name> -g <rg> -l <old-region>`
+
+> ⚠️ **`--custom-domain` is mandatory** when creating the resource. Without it, Entra ID
+> auth is unavailable and you're forced back onto API keys.
 
 > ⚠️ **The endpoint URL is deliberately not committed.** This repo is public, and the
 > resources we tested against live in a shared internal sandbox subscription. The URL
@@ -81,52 +94,86 @@ Resize is still worth doing — 33× smaller payload, half the tokens, 30% faste
 more reliable (see #5). Just pin the parameters in one shared constant and use the same
 path in `eval/` and production, so the eval stays valid if either stream changes them.
 
-### 2. Confidence values are not calibrated 🟠
+### 2. Confidence calibration — ✅ RESOLVED by `gpt-4.1`
 
-Every action unit in every call came back at `confidence: 0.9` — including ones the
-model got wrong, and ones where the feature was barely visible. The model is not
-introspecting; it's emitting a plausible-looking constant.
+On `gpt-4o` every action unit returned `confidence: 0.9` regardless of how visible the
+feature actually was — a plausible-looking constant, not introspection.
 
-**Consequence:** shipping this number as-is would be actively misleading, which
-undercuts the entire explainability pitch. Either derive confidence from something real,
-or drop the numeric display and use the FGS's own published inter-rater reliability to
-band the AUs instead (head/ears/eyes = higher trust, muzzle/whiskers = lower).
+`gpt-4.1`, prompted to vary it, returns genuinely differentiated values:
 
-### 3. The model will not abstain on its own 🟠
+```
+ears     score=0    conf=0.95   "Ears are upright and facing forward."
+eyes     score=1    conf=0.8
+muzzle   score=0    conf=0.7    "no clear tension visible"
+whiskers score=NULL conf=0      "Whiskers blend into the light background"
+head     score=1    conf=0.7
+```
 
-Zero `null` scores across all runs, including on a photo where whiskers were genuinely
-ambiguous. Exactly the failure predicted in `PLAN.md` — models strongly prefer producing
-an answer over admitting uncertainty.
+The ordering is sensible — clearly visible ears rate highest, invisible whiskers rate
+zero. Still worth sanity-checking against the FGS's published inter-rater reliability
+(head 0.90, ears 0.87, eyes 0.86, muzzle 0.63, whiskers 0.55) rather than trusting it blindly.
 
-**Consequence:** "you may answer null" in the prompt is not enough. Person B will need
-to push much harder — few-shot examples of correct abstention, or a separate visibility
-pass that runs before scoring.
+### 3. Abstention — ✅ RESOLVED by `gpt-4.1` + a firmer prompt
 
-### 4. Gating works, but the schema doesn't hold 🟡
+`gpt-4o` never once emitted `null`. `gpt-4.1` correctly abstained on whiskers with a
+usable reason, on the very first try.
 
-The non-cat test (a collage of dogs) was correctly **rejected** — good. But the model
-returned free prose in an enum field:
+What made the difference: stating that abstention is **required, not optional**, listing
+concrete cases that must be null, and adding "expect to return at least one null on a
+typical photo." Permission alone ("you may answer null") was not enough.
+
+### 4. Schema enforcement — ✅ RESOLVED by strict structured outputs
+
+`json_object` mode guarantees valid JSON, **not your schema**. On `gpt-4o` the rejection
+came back as prose in an enum field:
 
 ```json
 "rejectionReason": "The image contains dogs, not cats, and the Feline Grimace Scale is..."
 ```
 
-Expected one of `no_cat_detected | face_not_visible | image_quality | multiple_cats`.
+With `response_format: json_schema` + `strict: true`, the same image returns:
 
-**Consequence:** `json_object` mode guarantees *valid JSON*, not *your schema*. Use real
-structured outputs with a JSON Schema, and validate with Zod on the way out regardless.
-Treat a schema violation as a failed call and retry once.
+```json
+{ "status": "rejected", "rejectionReason": "no_cat_detected", "actionUnits": null }
+```
 
-### 5. Large payloads are flaky 🟡
+Validate with Zod anyway — belt and braces — but the model is now constrained rather
+than merely encouraged.
 
-One 5.9 MB base64 request returned a `500 server_error`. The 135 KB requests succeeded
-first try every time. Another reason the client-side downscale is load-bearing rather
-than nice-to-have.
+### 5. Gating works ✅
+
+A collage of dogs was correctly rejected by both models. This is the behaviour judges
+will probe, and it holds.
+
+### 6. `gpt-4.1` scores differently from `gpt-4o` 🟠
+
+Same photo: `gpt-4o` returned all zeros; `gpt-4.1` returned `eyes=1` and `head=1`.
+Both land at the same verdict — 2 ÷ (2 × 4 scorable) = **0.25**, under the 0.39
+threshold — but 4.1 is readier to assign a 1.
+
+**Consequence:** the eval set must be re-run from scratch if the model or its version
+ever changes. Treat the model ID as part of the measurement, exactly like the resize
+parameters. Pin it in config and don't drift.
+
+### 7. Large payloads are flaky 🟡
+
+One 5.9 MB base64 request returned `500 server_error`. The 135 KB requests never failed.
+Another reason the client-side downscale is load-bearing, not cosmetic.
 
 ---
 
 ## Sanity check on the happy path
 
-The relaxed test cat scored **0 out of 10** (normalized 0.0), consistently across 6 runs,
-correctly landing well under the 0.39 analgesia threshold. Baseline behaviour on a
-comfortable cat looks right — which is the one thing the eval set can actually prove.
+The relaxed test cat scored **2 out of a possible 8** (whiskers abstained), normalizing
+to **0.25** — correctly under the 0.39 analgesia threshold. On `gpt-4o` the same photo
+scored 0/10, consistently across 6 runs. Both reach the right verdict.
+
+Baseline behaviour on a comfortable cat looks right, which is the one thing the eval set
+can actually prove.
+
+## The prompt that produced this
+
+Recorded verbatim in `PLAN.md` terms: what mattered was (a) `strict: true` structured
+outputs, (b) framing abstention as **required, not permitted**, with concrete examples,
+and (c) explicitly telling the model not to emit a constant confidence. Person B should
+start from this rather than from a blank page.
