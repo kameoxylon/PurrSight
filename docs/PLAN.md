@@ -69,8 +69,10 @@ public/demo/                      A   (cached demo photos)
 
 **Verified working**, against our own dedicated Azure resource. See
 [`MODEL-ACCESS.md`](MODEL-ACCESS.md) for the confirmed config and the findings that
-change the build, and [`PROMPT-V0.md`](PROMPT-V0.md) for the exact prompt and schema
-that produced them — start from that file, not a blank page.
+change the build, and the prompt spec — **the highest-numbered `docs/PROMPT-V*.md`**, now
+[`PROMPT-V0.1.md`](PROMPT-V0.1.md) — for the exact prompt and schema. Start from that
+file, not a blank page. ([`PROMPT-V0.md`](PROMPT-V0.md) is superseded but retained: it is
+what produced the MODEL-ACCESS numbers.)
 
 Config: Entra ID auth (no API keys), **`gpt-4.1`** on `api-version=2025-01-01-preview`,
 `json_schema` + `strict: true`, 5–7 s per call.
@@ -156,10 +158,15 @@ it breaks the other person's build.
   `AssessResult`. Keep it thin. Validate size/MIME here.
 
 ### Person B
-- **Most of the original Phase 1 is already done** — see `MODEL-ACCESS.md` and
-  `PROMPT-V0.md`. Credentials work, the prompt works, the schema works. Don't re-derive it.
-- Port `PROMPT-V0.md` into `prompt.ts` and `schema.ts` verbatim, then get one hardcoded
-  image running through it from inside the Next.js app rather than a scratch script.
+- **Most of the original Phase 1 is already done** — see `MODEL-ACCESS.md` and the prompt
+  spec. Credentials work, the prompt works, the schema works. Don't re-derive it.
+- **Use the highest-numbered `docs/PROMPT-V*.md`** — currently
+  [`PROMPT-V0.1.md`](PROMPT-V0.1.md). Port it into `prompt.ts` and `schema.ts` verbatim,
+  then get one hardcoded image running through it from inside the Next.js app rather than
+  a scratch script. Set `meta.promptVersion` to match the file you ported.
+  > ⚠️ v0.1 is **unverified** — it fixes a real scoring defect (`FGS-RESEARCH.md` F1) but
+  > has not been run. Work through its verification checklist as part of this step, and
+  > treat `MODEL-ACCESS.md`'s numbers as describing v0 only.
 - `client.ts` — AAD token acquisition (`DefaultAzureCredential`), `temperature: 0`,
   sensible timeout, typed error handling. On schema-parse failure, retry once, then
   reject cleanly.
