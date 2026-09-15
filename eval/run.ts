@@ -30,6 +30,7 @@ import type { AssessResult } from '../src/lib/contract';
 // Safe to import statically: image-dimensions has no imports of its own, so it
 // cannot pull in the env-reading provider client ahead of the env bootstrap.
 import { MIN_IMAGE_EDGE, readImageDimensions } from '../src/lib/assess/image-dimensions';
+import { resolveFgsSource, type FgsSource } from './fgs-source';
 
 /* ===========================================================================
  * Env. Next.js loads .env.local automatically; a standalone tsx script does
@@ -383,19 +384,26 @@ async function main() {
 
   // Optional second set: the official FGS per-AU reference photographs. They
   // are (c) Universite de Montreal and this repo is public, so they are never
-  // committed — they are referenced from wherever the user keeps them locally.
-  const fgsDir = process.env.FGS_REFERENCE_DIR;
+  // committed — they are resolved at run time from a local folder or a private
+  // blob container. See eval/fgs-source.ts.
   const fgsCasesPath = join(EVAL_DIR, 'cases-fgs.json');
-  if (fgsDir && existsSync(fgsCasesPath)) {
-    if (!existsSync(fgsDir)) {
-      console.error(`\nFGS_REFERENCE_DIR is set but does not exist: ${fgsDir}`);
-      process.exit(1);
-    }
+  let fgs: FgsSource | null = null;
+  try {
+    fgs = await resolveFgsSource(CACHE_DIR);
+  } catch (err) {
+    console.error(`\n${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+
+  if (fgs && existsSync(fgsCasesPath)) {
     const fgsFile = JSON.parse(readFileSync(fgsCasesPath, 'utf8')) as CasesFile;
-    cases = cases.concat(fgsFile.cases.map((c) => ({ ...c, baseDir: fgsDir })));
-    console.log(`Including ${fgsFile.cases.length} FGS reference cases from ${fgsDir}`);
-  } else if (!fgsDir) {
-    console.log('FGS_REFERENCE_DIR not set — skipping the FGS sensitivity probe.');
+    cases = cases.concat(fgsFile.cases.map((c) => ({ ...c, baseDir: fgs!.dir })));
+    console.log(`Including ${fgsFile.cases.length} FGS reference cases from ${fgs.origin}`);
+  } else if (!fgs) {
+    console.log(
+      'No FGS reference source — skipping the FGS sensitivity probe.\n' +
+        'Set FGS_REFERENCE_DIR (local folder) or FGS_REFERENCE_ACCOUNT (private blob).',
+    );
   }
 
   if (ONLY) cases = cases.filter((c) => c.id.includes(ONLY));
@@ -503,7 +511,9 @@ async function main() {
     );
   } else {
     console.log('\nThis set measures over-scoring and gating only. It cannot measure sensitivity.');
-    console.log('Set FGS_REFERENCE_DIR to also run the per-AU FGS reference probe.');
+    console.log(
+      'Set FGS_REFERENCE_DIR or FGS_REFERENCE_ACCOUNT to also run the per-AU FGS reference probe.',
+    );
   }
 
   if (errored.length > 0 || failed.length > 0) process.exitCode = 1;

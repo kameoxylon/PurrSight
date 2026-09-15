@@ -48,8 +48,34 @@ The 15 official per-AU reference photographs, one per (action unit, score level)
 
 > **These images are © Université de Montréal.** They are FGS training material,
 > not ours to redistribute, and this repository is public. They are **never**
-> committed. Point `FGS_REFERENCE_DIR` in `.env.local` at a local copy and the
-> probe runs; leave it unset and the probe is skipped.
+> committed.
+
+**Two ways to supply them**, either in `.env.local`:
+
+| variable | what it does |
+|---|---|
+| `FGS_REFERENCE_DIR` | absolute path to a local copy. Needs no network or Azure login, and **wins if both are set** so a local copy is never silently overridden. |
+| `FGS_REFERENCE_ACCOUNT` | name of a **private** Azure storage account. The harness syncs the container into `eval/.cache/fgs` (git-ignored) and reuses it on later runs. |
+
+Leave both unset and the probe is simply skipped.
+
+The blob option exists because the findings below were previously only
+reproducible by whoever had the folder on their own disk — a real gap in a
+document that reports measurements. The synced copies are byte-identical to the
+originals, so they produce the same eval cache keys and cost nothing to re-run.
+
+**Access:** the container is `fgs-reference` on `stpurrsightfgs`, in the
+`purrsight` resource group. Shared-key access is **disabled**, so there is no
+connection string or SAS to leak and no secret in `.env.local` — auth is Entra
+only. You need the **Storage Blob Data Reader** role, which the subscription
+owner (`kre3ed@gmail.com`) grants:
+
+```bash
+az role assignment create --assignee <your-email> \
+  --role "Storage Blob Data Reader" \
+  --scope $(az storage account show -n stpurrsightfgs -g purrsight --query id -o tsv)
+az login   # DefaultAzureCredential needs a signed-in identity
+```
 
 **This is a weak, directional probe — not validation.** Four reasons, all of which
 the team must state out loud rather than bury:
