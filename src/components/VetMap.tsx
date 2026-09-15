@@ -2,31 +2,28 @@
 
 import { useState } from 'react';
 import VetLink from './VetLink';
-import { buildVetMapUrl } from '@/lib/vet-map';
+import { coarsen, formatDistance, type VetsResponse, type Vet } from '@/lib/azure-maps';
 
 /**
- * An embedded map of nearby veterinary clinics.
+ * Nearby veterinary clinics, from Azure Maps by way of our own API route.
  *
- * Location is requested only when the user taps the button — never on load.
- * An iframe cannot read the parent page's position, so "near me" genuinely
- * needs the geolocation prompt, and on a site whose whole pitch is trust that
- * prompt should be something the user asked for.
+ * Location is requested only when the user taps the button — never on load. On
+ * a site whose whole pitch is trust, a geolocation prompt should be something
+ * the user asked for.
  *
- * Every failure path degrades to the plain maps link: no API key configured,
- * geolocation unsupported, permission denied, or lookup timed out.
+ * The position is coarsened HERE, before it leaves the device, so full GPS
+ * precision never reaches our server or Azure. Every failure path — no
+ * geolocation, permission denied, Maps not configured, upstream error, or no
+ * results — degrades to the plain maps link the app has always had.
  */
 type State =
   | { kind: 'idle' }
-  | { kind: 'locating' }
-  | { kind: 'ready'; url: string }
+  | { kind: 'busy' }
+  | { kind: 'ready'; vets: Vet[]; mapPng: string | null }
   | { kind: 'unavailable' };
 
 export default function VetMap() {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY;
   const [state, setState] = useState<State>({ kind: 'idle' });
-
-  // Nothing to embed with. Behave exactly as the app did before the map existed.
-  if (!apiKey) return <VetLink variant="plain" />;
 
   const locate = () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -34,14 +31,21 @@ export default function VetMap() {
       return;
     }
 
-    setState({ kind: 'locating' });
+    setState({ kind: 'busy' });
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const url = buildVetMapUrl(apiKey, {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        });
-        setState(url ? { kind: 'ready', url } : { kind: 'unavailable' });
+      async (pos) => {
+        const { lat, lng } = coarsen({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        try {
+          const res = await fetch(`/api/vets?lat=${lat}&lng=${lng}`);
+          const body = (await res.json()) as VetsResponse;
+          if (!res.ok || body.status !== 'ok' || body.vets.length === 0) {
+            setState({ kind: 'unavailable' });
+            return;
+          }
+          setState({ kind: 'ready', vets: body.vets, mapPng: body.mapPng });
+        } catch {
+          setState({ kind: 'unavailable' });
+        }
       },
       () => setState({ kind: 'unavailable' }),
       { timeout: 10_000, maximumAge: 300_000 },
@@ -50,15 +54,30 @@ export default function VetMap() {
 
   if (state.kind === 'ready') {
     return (
-      <div className="space-y-2">
-        <iframe
-          title="Veterinary clinics near you"
-          src={state.url}
-          className="h-64 w-full rounded-xl border border-line"
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-          allowFullScreen
-        />
+      <div className="space-y-3">
+        {state.mapPng && (
+          // A data URL built by our own route: there is no remote host for the
+          // image optimiser to fetch from, so <Image /> would add nothing here.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={state.mapPng}
+            alt="Map showing veterinary clinics near your location"
+            width={640}
+            height={360}
+            className="h-auto w-full rounded-xl border border-line"
+          />
+        )}
+        <ul className="space-y-1.5">
+          {state.vets.map((vet) => (
+            <li key={`${vet.name}-${vet.position.lat}-${vet.position.lng}`} className="text-sm">
+              <span className="font-semibold">{vet.name}</span>
+              {vet.distanceMetres > 0 && (
+                <span className="text-faint"> · {formatDistance(vet.distanceMetres)}</span>
+              )}
+              {vet.address && <div className="text-xs text-faint">{vet.address}</div>}
+            </li>
+          ))}
+        </ul>
         <VetLink variant="plain" />
       </div>
     );
@@ -69,7 +88,7 @@ export default function VetMap() {
       <div className="space-y-1">
         <VetLink variant="plain" />
         <p className="text-xs text-faint">
-          We couldn&apos;t get your location, so here&apos;s a map search instead.
+          We couldn&apos;t look up clinics near you, so here&apos;s a map search instead.
         </p>
       </div>
     );
@@ -80,14 +99,14 @@ export default function VetMap() {
       <button
         type="button"
         onClick={locate}
-        disabled={state.kind === 'locating'}
+        disabled={state.kind === 'busy'}
         className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
       >
         <span aria-hidden>🏥</span>
-        {state.kind === 'locating' ? 'Finding vets near you…' : 'Show vets near me'}
+        {state.kind === 'busy' ? 'Finding vets near you…' : 'Show vets near me'}
       </button>
       <p className="text-xs text-faint">
-        Uses your location only when you tap this, and only to centre the map.
+        Uses your location only when you tap this, and only to find nearby clinics.
       </p>
     </div>
   );

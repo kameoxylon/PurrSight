@@ -131,28 +131,64 @@ the higher number. See `docs/MODEL-ACCESS.md`.
 
 ---
 
-## 6. Optional: the "vets near me" map
+## 6. Optional: the "vets near me" lookup
 
-`NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY` enables the embedded map in *What we
-recommend*. **You do not need it.** Leave it blank and that section falls back
-to a plain Google Maps link, which is what the app did before the map existed —
+*What we recommend* can list real veterinary clinics near you, with a map,
+using **Azure Maps** (resource `purrsight-maps`). **You do not need it.** Leave
+both variables blank and that section falls back to a plain Google Maps link —
 nothing breaks and the demo is unaffected.
 
-If you do set it, two things are easy to get wrong:
+Two variables, both **server-side**:
 
-- The `NEXT_PUBLIC_` prefix is deliberate. The Maps Embed API key is read by the
-  browser, so Next inlines it into the client bundle **at build time**. It is
-  public by design — restrict it in Google Cloud Console to the *Maps Embed API*
-  and to your hostnames (`http://localhost:3000/*` for local). Never paste an
-  unrestricted key here.
-- Because it is baked in at build time and our build runs in GitHub Actions,
-  **setting this one in App Service does nothing** — the bundle was already
-  built without it. It has to be set on the build step and redeployed. Every
-  other variable in `.env.example` is read at runtime and does belong in App
-  Service configuration.
+| Variable | Purpose |
+| --- | --- |
+| `AZURE_MAPS_CLIENT_ID` | The Maps account's `uniqueId`. Not a secret, but required for Entra auth — without it the data plane can't tell which account to bill and returns an opaque 401. |
+| `AZURE_MAPS_SUBSCRIPTION_KEY` | Optional fallback. When set, it wins and `AZURE_MAPS_CLIENT_ID` is ignored. |
 
-The map never asks for your location on page load — only when you tap
-*Show vets near me*. Denying the prompt falls back to the link.
+**There is deliberately no `NEXT_PUBLIC_` variant.** An Azure Maps subscription
+key *cannot* be restricted by HTTP referrer the way an embedded third-party map
+key can, so a key that reaches the browser is a key that bills this
+subscription for whoever copies it. Both the clinic search and the map render
+happen server-side in `/api/vets`; the browser only ever receives finished
+results and never sees a credential.
+
+Preferred setup — no secret at all, matching how §3 handles the model:
+
+```powershell
+# The uniqueId to put in AZURE_MAPS_CLIENT_ID
+az maps account show -n purrsight-maps -g purrsight --query properties.uniqueId -o tsv
+
+# One-time: let your own account read the data plane. Contributor is NOT enough
+# — it has no dataActions, exactly like the OpenAI resource in §3.
+az role assignment create `
+  --assignee-object-id (az ad signed-in-user show --query id -o tsv) `
+  --assignee-principal-type User `
+  --role "Azure Maps Data Reader" `
+  --scope (az maps account show -n purrsight-maps -g purrsight --query id -o tsv)
+```
+
+`az login` then supplies the credential locally. In production the App
+Service's system-assigned identity needs that same **`Azure Maps Data Reader`**
+role on the Maps account — the App Service does not exist yet, so that grant is
+a deployment-time step, not something already done.
+
+**Everyone on the team needs this role individually.** Without it the lookup
+fails with a bare HTTP 502 and no hint as to why, so grant it up front:
+
+```powershell
+az role assignment create `
+  --assignee "<their-email-or-object-id>" `
+  --role "Azure Maps Data Reader" `
+  --scope (az maps account show -n purrsight-maps -g purrsight --query id -o tsv)
+```
+
+Unlike a `NEXT_PUBLIC_` value, both variables are read at runtime on the
+server, so they belong in App Service > Configuration with everything else —
+nothing has to be present at build time.
+
+The lookup never asks for your location on page load — only when you tap *Show
+vets near me*, and the coordinates are rounded to ~110 m in the browser before
+they are sent. Denying the prompt falls back to the link.
 
 ---
 
@@ -167,3 +203,4 @@ The map never asks for your location on page load — only when you tap
 | Results come back instantly, always identical, no `[assess]` logs | You're on the Phase 0 stub — see §4. |
 | HTTP 502, *"Something went wrong on our end"* | May be a genuine fault, but Azure content safety also rejects some legitimate low-quality cat photos with a 400 that we currently map to this. Known gap, tracked in `docs/PLAN.md`. |
 | Lockfile shows ~144 unexpected deletions | Node version mismatch — see §1. |
+| *Show vets near me* always falls back to the plain link | §6. Check the server log: `[vets]` warnings name the cause. No log at all and an HTTP 503 means neither Maps variable is set; a 502 means the Azure call failed — usually missing `Azure Maps Data Reader` on `purrsight-maps` (Contributor is not enough), or a stale `az login`. |
