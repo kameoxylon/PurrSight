@@ -30,21 +30,33 @@ Next standalone bundle and ships it. No Azure login happens in CI.
 
 ## 1. Create the App Service (once)
 
+> **Already provisioned.** The resources below were created on 2026-09-15 and
+> are live — this section documents how, and how to recreate them. The plan
+> landed in **West US 3**, not West US 2: this subscription has **0 App Service
+> quota** in westus2/eastus/westus/eastus2, and westus3 was the first region
+> with free-tier capacity. The resource group stays in westus2; a plan in a
+> different region is fine.
+
 ```bash
-# App Service plan — Linux, Free tier (F1). Use B1 if F1 quota is unavailable.
+# App Service plan — Linux, Free tier (F1). B1 was tried first but this
+# subscription has 0 B1 *and* 0 F1 quota in several regions; westus3 had F1.
 az appservice plan create \
   --name purrsight-plan \
   --resource-group purrsight \
-  --location <REGION> \
+  --location westus3 \
   --is-linux \
   --sku F1
 
-# The web app itself, running the Node 20 runtime.
+# The web app. App Service Linux no longer offers NODE:20-lts (only 22/24/26);
+# we run NODE:22-lts. The repo's `engines` pin (>=20 <21) is advisory only
+# (no engine-strict), and the one native dep (sharp) is never invoked at
+# runtime — the app uses plain <img> and an `unoptimized` next/image — so
+# building on 20/22 and running on 22 is safe.
 az webapp create \
   --name purrsight \
   --resource-group purrsight \
   --plan purrsight-plan \
-  --runtime "NODE:20-lts"
+  --runtime "NODE:22-lts"
 ```
 
 > `purrsight` must be **globally unique** across `*.azurewebsites.net`. If it's
