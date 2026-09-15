@@ -11,7 +11,7 @@ on:
 
 env:
   AZURE_WEBAPP_NAME: purrsight   # must match the App Service name in Azure
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
 
 # Avoid overlapping deploys stepping on each other.
 concurrency:
