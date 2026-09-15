@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AssessResult } from '@/lib/contract';
 import UploadCard from '@/components/UploadCard';
 import ResultPanel from '@/components/ResultPanel';
@@ -18,6 +18,24 @@ export default function Home() {
   const [lastBlob, setLastBlob] = useState<Blob | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState(false);
+  const [completedAt, setCompletedAt] = useState<Date | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+
+  /**
+   * Show the submitted photo alongside its score. Derived from the blob rather
+   * than threaded down from UploadCard so the sample cats and a real upload
+   * behave identically, and so the URL is revoked when the blob changes or the
+   * page unmounts — object URLs are held until explicitly released.
+   */
+  useEffect(() => {
+    if (!lastBlob) {
+      setPhotoUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(lastBlob);
+    setPhotoUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [lastBlob]);
 
   async function assess(blob: Blob) {
     setLastBlob(blob);
@@ -29,6 +47,7 @@ export default function Home() {
       const res = await fetch('/api/assess', { method: 'POST', body: form });
       const data = (await res.json()) as AssessResult;
       setResult(data);
+      setCompletedAt(new Date());
     } catch {
       setResult({
         status: 'error',
@@ -44,10 +63,12 @@ export default function Home() {
   function reset() {
     setResult(null);
     setLastBlob(null);
+    setCompletedAt(null);
     setPhase('idle');
   }
 
   const showUpload = phase === 'idle' && result === null;
+  const showResults = phase === 'idle' && result?.status === 'assessed';
 
   return (
     <div className="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col px-4 pt-10 pb-3.5 sm:pt-14">
@@ -64,10 +85,24 @@ export default function Home() {
             <span className="text-ink">Sight</span>
           </h1>
         </div>
-        <p className="mx-auto mt-3 max-w-md text-muted">
-          Upload a photo of your cat for an AI-assisted read on signs of pain, based on the Feline
-          Grimace Scale.
-        </p>
+        {showResults ? (
+          <div className="mt-3">
+            <p className="text-lg font-semibold text-ink">Assessment Results</p>
+            {completedAt && (
+              <p className="mt-0.5 text-sm text-muted">
+                {completedAt.toLocaleString(undefined, {
+                  dateStyle: 'long',
+                  timeStyle: 'short',
+                })}
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="mx-auto mt-3 max-w-md text-muted">
+            Upload a photo of your cat for an AI-assisted read on signs of pain, based on the Feline
+            Grimace Scale.
+          </p>
+        )}
       </header>
 
       <main className="mt-8 flex-1">
@@ -77,7 +112,7 @@ export default function Home() {
 
         {phase === 'idle' && result?.status === 'assessed' && (
           <div className="space-y-6">
-            <ResultPanel assessment={result.assessment} />
+            <ResultPanel assessment={result.assessment} photoUrl={photoUrl} />
             <div className="flex flex-wrap justify-center gap-3">
               <button
                 onClick={async () => {
@@ -133,7 +168,7 @@ export default function Home() {
         )}
       </main>
 
-      <Disclaimer />
+      <Disclaimer variant={showResults ? 'short' : 'full'} />
     </div>
   );
 }

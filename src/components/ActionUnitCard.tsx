@@ -18,9 +18,12 @@ function chipClasses(score: 0 | 1 | 2 | null): string {
 export default function ActionUnitCard({
   au,
   samples,
+  className = '',
 }: {
   au: ActionUnitAssessment;
   samples: number;
+  /** Lets the grid stretch the odd last card across both columns. */
+  className?: string;
 }) {
   const lowerReliability = isLowerReliability(au.id);
   const notAssessable = au.score === null;
@@ -29,7 +32,7 @@ export default function ActionUnitCard({
     <div
       className={`rounded-xl border p-4 ${
         lowerReliability ? 'border-line bg-surface-2/60' : 'border-line bg-card'
-      }`}
+      } ${className}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>

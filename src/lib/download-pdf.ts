@@ -7,11 +7,13 @@
  * interactive affordances (the "find a vet near me" link and its map) are
  * absent by construction rather than filtered out.
  *
- * Section order intentionally mirrors the page: caveats, score, features,
- * recommendation.
+ * Section order intentionally mirrors the page: score, recommendation,
+ * features. Caveats are split the same way the page splits them (splitCaveats
+ * in ./ui) — the scale's scope rides under the score as a quiet note, while
+ * caveats about this photo sit with the features they name.
  */
 import type { Assessment, ActionUnitAssessment } from './contract';
-import { BAND_STYLES, scoreLabel, AU_RELIABILITY } from './ui';
+import { BAND_STYLES, scoreLabel, AU_RELIABILITY, splitCaveats } from './ui';
 
 const PAGE_W = 595.28;
 const PAGE_H = 841.89;
@@ -68,6 +70,8 @@ export async function buildResultPdf(assessment: Assessment): Promise<Uint8Array
   const muted = rgb(0.42, 0.42, 0.47);
   const line = rgb(0.85, 0.85, 0.88);
 
+  const { scope: scopeCaveats, photo: photoCaveats } = splitCaveats(assessment.caveats);
+
   let page = doc.addPage([PAGE_W, PAGE_H]);
   let y = PAGE_H - MARGIN;
 
@@ -90,9 +94,7 @@ export async function buildResultPdf(assessment: Assessment): Promise<Uint8Array
   }
 
   const disclaimer =
-    'PurrSight is not a diagnostic tool and is not a substitute for veterinary care. It is an ' +
-    'awareness aid. The Feline Grimace Scale was validated for acute pain - a cat with chronic ' +
-    'pain may still score low. If something seems wrong, contact a veterinarian.';
+    'PurrSight is not a diagnostic tool and is not a substitute for veterinary care.';
   const provenance =
     `Assessed with ${assessment.meta.model} - prompt ${assessment.meta.promptVersion} - ` +
     `${assessment.meta.samples} model runs. The Feline Grimace Scale is (c) Universite de Montreal.`;
@@ -216,15 +218,7 @@ export async function buildResultPdf(assessment: Assessment): Promise<Uint8Array
     y -= boxH + 14;
   }
 
-  /* ---- 1. Things to keep in mind ---------------------------------------- */
-  if (assessment.caveats.length > 0) {
-    heading('Things to keep in mind');
-    for (const caveat of assessment.caveats) {
-      paragraph(`- ${caveat.message}`, { size: 10, color: ink, indent: 6, gap: 3 });
-    }
-  }
-
-  /* ---- 2. Score ---------------------------------------------------------- */
+  /* ---- 1. Score ---------------------------------------------------------- */
   heading('Score');
   const band = BAND_STYLES[assessment.band];
   const pct = Math.round(assessment.normalizedScore * 100);
@@ -266,8 +260,19 @@ export async function buildResultPdf(assessment: Assessment): Promise<Uint8Array
     { size: 9.5, color: muted, gap: 4 },
   );
 
+  for (const caveat of scopeCaveats) {
+    paragraph(caveat.message, { font: italic, size: 8.5, color: muted, gap: 4 });
+  }
+
+  /* ---- 2. What we recommend ---------------------------------------------- */
+  heading('What we recommend');
+  paragraph(assessment.recommendation, { size: 10, gap: 6 });
+
   /* ---- 3. Facial features ------------------------------------------------ */
   heading('Facial features we looked at');
+  for (const caveat of photoCaveats) {
+    paragraph(`- ${caveat.message}`, { size: 9.5, color: muted, indent: 6, gap: 3 });
+  }
   for (const au of assessment.actionUnits) {
     drawActionUnit(au, assessment.meta.samples);
   }
@@ -301,10 +306,6 @@ export async function buildResultPdf(assessment: Assessment): Promise<Uint8Array
     page.drawText(sanitize(note), { x: MARGIN + 12, y: y - 8, size: 8, font: italic, color: muted });
     y -= 18;
   }
-
-  /* ---- 4. What we recommend --------------------------------------------- */
-  heading('What we recommend');
-  paragraph(assessment.recommendation, { size: 10, gap: 6 });
 
   /* ---- Footer on every page --------------------------------------------- */
   const pages = doc.getPages();
