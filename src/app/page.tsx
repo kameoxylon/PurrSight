@@ -64,6 +64,7 @@ export default function Home() {
     setResult(null);
     setLastBlob(null);
     setCompletedAt(null);
+    setPdfError(false);
     setPhase('idle');
   }
 
@@ -73,21 +74,38 @@ export default function Home() {
   return (
     <div className="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col px-4 pt-10 pb-3.5 sm:pt-14">
       <header className="text-center">
-        <div className="inline-flex items-center gap-3">
-          <span
-            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand to-brand-hover text-white shadow-sm ring-1 ring-black/5"
-            aria-hidden
+        <h1 className="inline-block text-3xl font-extrabold tracking-tight sm:text-4xl">
+          {/* Clicking the wordmark clears the current result, the way the logo
+              on any site returns you to the start. Disabled mid-assessment:
+              resetting there would leave the in-flight request to resolve and
+              slam its result back onto a screen the user just cleared.
+              title, not aria-label — an aria-label would override name-from-
+              content and rename the page's only <h1> for heading navigation. */}
+          <button
+            type="button"
+            onClick={reset}
+            disabled={phase === 'loading'}
+            title="Start over"
+            className="inline-flex items-center gap-3 rounded-2xl transition hover:opacity-80 disabled:pointer-events-none"
           >
-            <PawLogo className="h-7 w-7" />
-          </span>
-          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-            <span className="text-brand">Purr</span>
-            <span className="text-ink">Sight</span>
-          </h1>
-        </div>
+            <span
+              className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand to-brand-hover text-white shadow-sm ring-1 ring-black/5"
+              aria-hidden
+            >
+              <PawLogo className="h-7 w-7" />
+            </span>
+            <span>
+              <span className="text-brand">Purr</span>
+              <span className="text-ink">Sight</span>
+            </span>
+          </button>
+        </h1>
         {showResults ? (
           <div className="mt-3">
-            <p className="text-lg font-semibold text-ink">Assessment Results</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand">
+              Feline Grimace Scale
+            </p>
+            <p className="mt-1 text-lg font-semibold text-ink">Assessment Results</p>
             {completedAt && (
               <p className="mt-0.5 text-sm text-muted">
                 {completedAt.toLocaleString(undefined, {

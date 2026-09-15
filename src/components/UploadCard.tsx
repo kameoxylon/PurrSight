@@ -179,6 +179,13 @@ export default function UploadCard({
       {error && (
         <p className="mt-3 rounded-lg bg-rose-500/10 px-3 py-2 text-sm text-rose-700 dark:text-rose-300">{error}</p>
       )}
+
+      {/* Kept accurate on purpose: the photo really is sent to a third party
+          (Azure OpenAI) to be read, and nothing here ever writes it to disk,
+          a database, or browser storage. Don't soften this to "stays private". */}
+      <p className="mt-4 text-center text-xs text-faint">
+        Your photo is sent to Azure OpenAI to be analyzed, and is never stored by PurrSight.
+      </p>
     </div>
   );
 }
