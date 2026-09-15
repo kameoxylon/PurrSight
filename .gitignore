@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# eval result cache (keyed by image bytes + prompt version + model)
+eval/.cache/

@@ -1,0 +1,432 @@
+{
+  "about": {
+    "purpose": "Regression set for PurrSight's assessment pipeline.",
+    "whatThisMeasures": [
+      "Over-scoring: do comfortable, healthy cats stay below the 0.39 analgesia threshold?",
+      "Gating: does junk input get refused, with the right reason?",
+      "Abstention: does an occluded feature come back null rather than invented?",
+      "Drift: do scores move when only image quality changes and the cat does not?"
+    ],
+    "whatThisCannotMeasure": [
+      "SENSITIVITY. We have no labeled painful cats — those live in veterinary datasets we do not have access to. This set cannot tell you whether PurrSight detects genuine pain, only whether it stays quiet when it should and refuses when it should. Say exactly this to judges instead of quoting an accuracy number we have not earned."
+    ],
+    "corpusLimitations": [
+      "Only THREE distinct animals. 27 of the 34 cases are derived from tabby.jpg, grey.jpg and calico.jpg, so variants of the same cat are not independent samples. A per-case pass rate overstates the diversity of the evidence.",
+      "Degradations are synthetic. Multiplying brightness is not the same as photographing a cat in a dim room, and the *-lowcontrast cases are deliberately NOT called dark-coat cases for that reason. calico-baseline, whose face is roughly half black, is the only genuine dark-fur data point here.",
+      "All three source photos are relaxed, comfortable cats. Every 'assessed' expectation below is therefore a below-threshold expectation. That is a property of what we could license, not a claim about the scale."
+    ],
+    "modes": {
+      "assert": "There is a defensible correct answer. A mismatch is a failure and should be investigated.",
+      "observe": "Recorded and reported, never failed. These exist to measure behaviour the research says is unstable — chiefly the whisker drift under underexposure documented in docs/PROMPT-V0.1.md."
+    }
+  },
+  "cases": [
+    {
+      "id": "tabby-baseline",
+      "file": "tabby-baseline.jpg",
+      "group": "comfortable",
+      "mode": "assert",
+      "expect": {
+        "status": "assessed",
+        "aboveThreshold": false
+      },
+      "note": "Licensed demo photo at the size the app actually sends. Alert, relaxed cat, mouth open."
+    },
+    {
+      "id": "grey-baseline",
+      "file": "grey-baseline.jpg",
+      "group": "comfortable",
+      "mode": "assert",
+      "expect": {
+        "status": "assessed",
+        "aboveThreshold": false
+      },
+      "note": "Front-facing close-up, every AU clearly resolvable. The easiest case in the set."
+    },
+    {
+      "id": "calico-baseline",
+      "file": "calico-baseline.jpg",
+      "group": "comfortable",
+      "mode": "assert",
+      "expect": {
+        "status": "assessed",
+        "aboveThreshold": false
+      },
+      "note": "Full-body shot, small and slightly off-axis face, half-black fur. The only genuine dark-fur case in the corpus and the hardest legitimate photo."
+    },
+    {
+      "id": "tabby-small384",
+      "file": "tabby-small384.jpg",
+      "group": "comfortable",
+      "mode": "assert",
+      "expect": {
+        "status": "assessed",
+        "aboveThreshold": false
+      },
+      "note": "384px wide. The V0.1 probe scored this fine; whiskers become resolvable again above ~192px."
+    },
+    {
+      "id": "grey-small384",
+      "file": "grey-small384.jpg",
+      "group": "comfortable",
+      "mode": "assert",
+      "expect": {
+        "status": "assessed",
+        "aboveThreshold": false
+      }
+    },
+    {
+      "id": "calico-small384",
+      "file": "calico-small384.jpg",
+      "group": "comfortable",
+      "mode": "observe",
+      "note": "Observe, not assert: calico's face is already small in frame, so 384px may legitimately cross into unreadable. Either answer is defensible."
+    },
+    {
+      "id": "tabby-dim50",
+      "file": "tabby-dim50.jpg",
+      "group": "underexposed",
+      "mode": "observe",
+      "note": "Brightness x0.50. Watch whiskers specifically — V0.1 checklist step 4."
+    },
+    {
+      "id": "tabby-dim30",
+      "file": "tabby-dim30.jpg",
+      "group": "underexposed",
+      "mode": "observe",
+      "note": "Brightness x0.30."
+    },
+    {
+      "id": "tabby-dim18",
+      "file": "tabby-dim18.jpg",
+      "group": "underexposed",
+      "mode": "observe",
+      "note": "Brightness x0.18. The V0.1 probe saw whiskers move 0 -> 1 unanimously here while the model neither abstained nor rejected. This is the single most important case in the set: the drift is upward, which is the over-scoring direction PLAN.md names as the fastest way to lose trust."
+    },
+    {
+      "id": "grey-dim50",
+      "file": "grey-dim50.jpg",
+      "group": "underexposed",
+      "mode": "observe"
+    },
+    {
+      "id": "grey-dim30",
+      "file": "grey-dim30.jpg",
+      "group": "underexposed",
+      "mode": "observe"
+    },
+    {
+      "id": "grey-dim18",
+      "file": "grey-dim18.jpg",
+      "group": "underexposed",
+      "mode": "observe"
+    },
+    {
+      "id": "calico-dim50",
+      "file": "calico-dim50.jpg",
+      "group": "underexposed",
+      "mode": "observe"
+    },
+    {
+      "id": "calico-dim30",
+      "file": "calico-dim30.jpg",
+      "group": "underexposed",
+      "mode": "observe"
+    },
+    {
+      "id": "calico-dim18",
+      "file": "calico-dim18.jpg",
+      "group": "underexposed",
+      "mode": "observe"
+    },
+    {
+      "id": "tabby-lowcontrast",
+      "file": "tabby-lowcontrast.jpg",
+      "group": "lowcontrast",
+      "mode": "observe",
+      "note": "Desaturated and darkened. A proxy for low local contrast, NOT for a black coat."
+    },
+    {
+      "id": "grey-lowcontrast",
+      "file": "grey-lowcontrast.jpg",
+      "group": "lowcontrast",
+      "mode": "observe"
+    },
+    {
+      "id": "calico-lowcontrast",
+      "file": "calico-lowcontrast.jpg",
+      "group": "lowcontrast",
+      "mode": "observe"
+    },
+    {
+      "id": "tabby-occl-muzzle",
+      "file": "tabby-occl-muzzle.jpg",
+      "group": "abstention",
+      "mode": "assert",
+      "expect": {
+        "status": "assessed",
+        "nullAus": [
+          "muzzle",
+          "whiskers"
+        ]
+      },
+      "note": "Muzzle and whisker pads blacked out; ears and eyes untouched. Three AUs remain, which is exactly MIN_SCORABLE_AUS, so this must still produce a score. The V0.1 probe got this exactly right unanimously."
+    },
+    {
+      "id": "grey-occl-muzzle",
+      "file": "grey-occl-muzzle.jpg",
+      "group": "abstention",
+      "mode": "assert",
+      "expect": {
+        "status": "assessed",
+        "nullAus": [
+          "muzzle",
+          "whiskers"
+        ]
+      }
+    },
+    {
+      "id": "calico-occl-muzzle",
+      "file": "calico-occl-muzzle.jpg",
+      "group": "abstention",
+      "mode": "assert",
+      "expect": {
+        "status": "assessed",
+        "nullAus": [
+          "muzzle",
+          "whiskers"
+        ]
+      }
+    },
+    {
+      "id": "tabby-occl-ears",
+      "file": "tabby-occl-ears.jpg",
+      "group": "gating",
+      "mode": "assert",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": [
+          "image_quality",
+          "face_not_visible"
+        ]
+      },
+      "note": "Ears blacked out. The probe recorded this gating the whole image rather than nulling one AU — acceptable, and kept as a regression check on a documented behaviour. Either reason is defensible."
+    },
+    {
+      "id": "tabby-blur",
+      "file": "tabby-blur.jpg",
+      "group": "gating",
+      "mode": "assert",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": [
+          "image_quality",
+          "face_not_visible"
+        ]
+      }
+    },
+    {
+      "id": "grey-blur",
+      "file": "grey-blur.jpg",
+      "group": "gating",
+      "mode": "assert",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": [
+          "image_quality",
+          "face_not_visible"
+        ]
+      }
+    },
+    {
+      "id": "calico-blur",
+      "file": "calico-blur.jpg",
+      "group": "gating",
+      "mode": "assert",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": [
+          "image_quality",
+          "face_not_visible"
+        ]
+      }
+    },
+    {
+      "id": "tabby-tiny96",
+      "file": "tabby-tiny96.jpg",
+      "group": "gating",
+      "mode": "assert",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": [
+          "image_quality",
+          "face_not_visible"
+        ]
+      },
+      "note": "96px wide. Whiskers are not resolvable at all at this size. NOTE: the 48px variant of this photo is what tripped an Azure content-safety 400 during Phase 1 — if this case errors rather than rejecting, that is the known false positive, not a gating failure."
+    },
+    {
+      "id": "grey-tiny96",
+      "file": "grey-tiny96.jpg",
+      "group": "gating",
+      "mode": "assert",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": [
+          "image_quality",
+          "face_not_visible"
+        ]
+      }
+    },
+    {
+      "id": "calico-tiny96",
+      "file": "calico-tiny96.jpg",
+      "group": "gating",
+      "mode": "assert",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": [
+          "image_quality",
+          "face_not_visible"
+        ]
+      }
+    },
+    {
+      "id": "multi-tabby-grey",
+      "file": "multi-tabby-grey.jpg",
+      "group": "gating",
+      "mode": "assert",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": "multiple_cats"
+      },
+      "note": "Two clearly distinct cats side by side, both faces fully visible. There is no correct single score here."
+    },
+    {
+      "id": "multi-calico-tabby",
+      "file": "multi-calico-tabby.jpg",
+      "group": "gating",
+      "mode": "assert",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": "multiple_cats"
+      }
+    },
+    {
+      "id": "junk-noise",
+      "file": "junk-noise.jpg",
+      "group": "gating",
+      "mode": "assert",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": [
+          "no_cat_detected",
+          "image_quality"
+        ]
+      },
+      "note": "Gaussian noise. No cat, and arguably also unusable quality."
+    },
+    {
+      "id": "junk-solid",
+      "file": "junk-solid.jpg",
+      "group": "gating",
+      "mode": "assert",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": [
+          "no_cat_detected",
+          "image_quality"
+        ]
+      },
+      "note": "Flat colour field."
+    },
+    {
+      "id": "junk-scene",
+      "file": "junk-scene.jpg",
+      "group": "gating",
+      "mode": "assert",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": "no_cat_detected"
+      },
+      "note": "A drawn outdoor scene with a house and a car. Contains objects to misread, unlike pure noise, so it is a stronger test of 'is there a cat' than a blank image."
+    },
+    {
+      "id": "junk-text",
+      "file": "junk-text.jpg",
+      "group": "gating",
+      "mode": "assert",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": "no_cat_detected"
+      },
+      "note": "A screenshot-like text image, standing in for a confused upload."
+    },
+    {
+      "id": "tabby-small160",
+      "file": "tabby-small160.jpg",
+      "group": "resolution-boundary",
+      "mode": "assert",
+      "note": "Short edge 107px, below MIN_IMAGE_EDGE (200), so the pre-model gate must reject this. Before the gate existed this was scored instead.",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": "image_quality"
+      }
+    },
+    {
+      "id": "tabby-small224",
+      "file": "tabby-small224.jpg",
+      "group": "resolution-boundary",
+      "mode": "assert",
+      "note": "Short edge 149px, below MIN_IMAGE_EDGE (200), so the pre-model gate must reject this. Before the gate existed this was scored instead.",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": "image_quality"
+      }
+    },
+    {
+      "id": "grey-small160",
+      "file": "grey-small160.jpg",
+      "group": "resolution-boundary",
+      "mode": "assert",
+      "note": "Short edge 160px, below MIN_IMAGE_EDGE (200), so the pre-model gate must reject this. Before the gate existed this was scored instead.",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": "image_quality"
+      }
+    },
+    {
+      "id": "grey-small224",
+      "file": "grey-small224.jpg",
+      "group": "resolution-boundary",
+      "mode": "assert",
+      "note": "Short edge 224px, at or above MIN_IMAGE_EDGE (200), so the gate must NOT fire. Guards against the threshold creeping up and rejecting usable photos.",
+      "expect": {
+        "status": "assessed",
+        "aboveThreshold": false
+      }
+    },
+    {
+      "id": "calico-small160",
+      "file": "calico-small160.jpg",
+      "group": "resolution-boundary",
+      "mode": "assert",
+      "note": "Short edge 120px, below MIN_IMAGE_EDGE (200), so the pre-model gate must reject this. Before the gate existed this was scored instead.",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": "image_quality"
+      }
+    },
+    {
+      "id": "calico-small224",
+      "file": "calico-small224.jpg",
+      "group": "resolution-boundary",
+      "mode": "assert",
+      "note": "Short edge 168px, below MIN_IMAGE_EDGE (200), so the pre-model gate must reject this. Before the gate existed this was scored instead.",
+      "expect": {
+        "status": "rejected",
+        "rejectionReason": "image_quality"
+      }
+    }
+  ]
+}

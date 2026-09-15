@@ -27,6 +27,7 @@ import {
   type AssessResult,
 } from '../contract';
 import { getModelName, runSingleAssessment, type RunOutcome } from './client';
+import { MIN_IMAGE_EDGE, readImageDimensions } from './image-dimensions';
 import { PROMPT_VERSION } from './prompt';
 import {
   EMPTY_USAGE,
@@ -36,7 +37,7 @@ import {
   formatUsd,
   type TokenUsage,
 } from './pricing';
-import { aggregate } from './scoring';
+import { aggregate, rejectImageTooSmall } from './scoring';
 import type { ValidatedResponse } from './schema';
 
 /**
@@ -109,8 +110,31 @@ export const assessImage: AssessImageFn = async (input): Promise<AssessResult> =
   // interleaved output from parallel requests is unreadable.
   const id = Math.random().toString(36).slice(2, 8);
   const startedAt = Date.now();
-  const sizeKb = Math.round((input.imageBase64.length * 0.75) / 1024);
-  console.info(`[assess] ${id} start | ${input.mimeType} ~${sizeKb}KB | ${SAMPLES_PER_ASSESSMENT} samples`);
+  const bytes = Buffer.from(input.imageBase64, 'base64');
+  const sizeKb = Math.round(bytes.length / 1024);
+
+  // PRE-MODEL GATE. The eval found that a 96px image is not refused by the
+  // model — all three tiny96 cases came back scored, 3/3 agreement, and one
+  // returned 0.40 "likely", above the analgesia threshold, for a comfortable
+  // cat. Resolution is a mechanical property of the input, so it is settled
+  // here rather than asked of a model that demonstrably answers wrong.
+  const dims = readImageDimensions(bytes);
+  if (dims && Math.min(dims.width, dims.height) < MIN_IMAGE_EDGE) {
+    console.info(
+      `[assess] ${id} rejected before model | ${dims.width}x${dims.height} ` +
+        `shortEdge=${Math.min(dims.width, dims.height)} < ${MIN_IMAGE_EDGE}`,
+    );
+    return rejectImageTooSmall(dims.width, dims.height);
+  }
+  if (!dims) {
+    // Fail OPEN. The MIME type is already validated by the route, so an
+    // unreadable header is far more likely to be a format quirk than an
+    // attack, and refusing a real photo is the worse outcome.
+    console.warn(`[assess] ${id} could not read dimensions from ${input.mimeType}; not gating on size`);
+  }
+
+  const size = dims ? `${dims.width}x${dims.height} ` : '';
+  console.info(`[assess] ${id} start | ${input.mimeType} ~${sizeKb}KB ${size}| ${SAMPLES_PER_ASSESSMENT} samples`);
 
   try {
     // VOTE RULE 1: a run that failed does not get a vote. It is discarded

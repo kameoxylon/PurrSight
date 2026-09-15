@@ -1,3 +1,20 @@
+# FGS Prompt v0.1 — run, measured, and superseded by v0.2
+
+> **Status note (added after this file was written).** The warning below — "nothing in this
+> file has been run against the model yet" — **is no longer true.** v0.1 *has* been run, by the
+> `eval/` harness, against `gpt-4.1` on a 34-image generated corpus plus a 15-image FGS
+> reference probe. Its results are the baseline section of [`../eval/README.md`](../eval/README.md),
+> and every "v0.1" number quoted anywhere in the repo comes from that run.
+>
+> v0.1 is **superseded by [`PROMPT-V0.2.md`](./PROMPT-V0.2.md)**, which is what
+> `src/lib/assess/prompt.ts` now ships. This file is retained because it is the prompt the
+> baseline numbers were produced by, and v0.2 is only interpretable against it.
+>
+> The verification checklist below is still the live checklist; it has been *started*, not
+> completed. The original text is left unedited from here down.
+
+---
+
 # FGS Prompt v0.1 — NOT YET VERIFIED ⚠️
 
 Supersedes [`PROMPT-V0.md`](./PROMPT-V0.md), which stays in the repo because every number in

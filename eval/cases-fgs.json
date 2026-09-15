@@ -1,0 +1,133 @@
+{
+  "about": {
+    "purpose": "Directional sensitivity probe using the official Feline Grimace Scale per-AU reference photographs.",
+    "images": {
+      "location": "NOT IN THIS REPOSITORY. Set FGS_REFERENCE_DIR in .env.local to a local folder holding the official FGS reference images.",
+      "copyright": "The Feline Grimace Scale and its reference images are (c) Universite de Montreal. They are training material, not ours to redistribute, and this repository is public. They are referenced by absolute path and must never be copied into eval/images/ or committed.",
+      "expectedFilenames": "<au>_<label>_<score>_sample1.png, e.g. earposition_markedlypresent_2_sample1.png. The *_guide.png line drawings are deliberately NOT used: they are illustrations, not photographs of cats, so the pipeline would gate them as no_cat_detected and the result would mean nothing."
+    },
+    "whyThisIsWeakEvidence": [
+      "TRAINING-DATA CONTAMINATION. These are published FGS training materials. GPT-4.1 has very likely seen them, so a correct score may be recall rather than assessment. This is a directional probe, NOT validation, and must not be described to anyone as accuracy on real painful cats.",
+      "ONE LABEL PER IMAGE. Each file is labeled for a single action unit. earposition_*_2_sample1.png tells us the ear score and nothing about that cat's eyes, muzzle, whiskers or head, so only the labeled AU is asserted and everything else is observed.",
+      "n = 1 PER CELL. One photograph per (action unit, score level). Fifteen photographs in total. No distribution, no error bars.",
+      "FEWER DISTINCT CATS THAN FILES. Verified by inspection: earposition_2, orbitaltightening_2 and whiskersposition_2 are near-identical frames of the SAME tabby in the SAME session (distinct file hashes, but the same photograph). So the severe level covers only THREE independent animals, not five, and a run that passes all three tabby cases has really passed one. Do not read the raw pass count as five independent successes.",
+      "NO OVERALL FGS SCORE. These are per-AU exemplars, so normalizedScore is recorded but never asserted - there is no ground-truth total to compare it against."
+    ],
+    "assertionPolicy": "Deliberately tolerant, because temperature:0 is documented non-deterministic here (MODEL-ACCESS.md finding 1) and an exact-match assertion would flap. Level 0 must not score 2, level 2 must not score 0, and level 1 is observed only. What this catches is INVERSION - calling a clearly painful face comfortable, or vice versa - which is the failure that would actually matter."
+  },
+  "cases": [
+    {
+      "id": "fgs-ears-0",
+      "file": "earposition_absent_0_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "assert",
+      "expect": { "status": "assessed", "auMax": { "ears": 1 } },
+      "note": "Ears forward and upright. Reference for ear position = 0 (absent)."
+    },
+    {
+      "id": "fgs-ears-1",
+      "file": "earposition_moderatelypresent_1_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "observe",
+      "note": "Ear position = 1 (moderately present). Middle levels are observed, not asserted."
+    },
+    {
+      "id": "fgs-ears-2",
+      "file": "earposition_markedlypresent_2_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "assert",
+      "expect": { "status": "assessed", "auMin": { "ears": 1 } },
+      "note": "Ears flattened and rotated outward. Reference for ear position = 2. SAME TABBY/SESSION as fgs-eyes-2 and fgs-whiskers-2 - these three are one animal, not three."
+    },
+
+    {
+      "id": "fgs-eyes-0",
+      "file": "orbitaltightening_absent_0_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "assert",
+      "expect": { "status": "assessed", "auMax": { "eyes": 1 } },
+      "note": "Eyes fully open. Reference for orbital tightening = 0."
+    },
+    {
+      "id": "fgs-eyes-1",
+      "file": "orbitaltightening_moderatelypresent_1_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "observe"
+    },
+    {
+      "id": "fgs-eyes-2",
+      "file": "orbitaltightening_markedlypresent_2_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "assert",
+      "expect": { "status": "assessed", "auMin": { "eyes": 1 } },
+      "note": "Eyes squeezed shut. Reference for orbital tightening = 2. SAME TABBY/SESSION as fgs-ears-2 and fgs-whiskers-2."
+    },
+
+    {
+      "id": "fgs-muzzle-0",
+      "file": "muzzletension_absent_0_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "assert",
+      "expect": { "status": "assessed", "auMax": { "muzzle": 1 } },
+      "note": "Relaxed, rounded muzzle. Reference for muzzle tension = 0. NOTE: muzzle is one of the two weakest AUs in the original validation (inter-rater 0.63)."
+    },
+    {
+      "id": "fgs-muzzle-1",
+      "file": "muzzletension_moderatelypresent_1_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "observe"
+    },
+    {
+      "id": "fgs-muzzle-2",
+      "file": "muzzletension_markedlypresent_2_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "assert",
+      "expect": { "status": "assessed", "auMin": { "muzzle": 1 } },
+      "note": "Elliptical, tense muzzle. Reference for muzzle tension = 2. A long-haired cat whose muzzle is largely buried in fur - genuinely hard, and the pipeline scored it 0 (FAIL, 2026-09). An independent animal, unlike the three tabby cases."
+    },
+
+    {
+      "id": "fgs-whiskers-0",
+      "file": "whiskersposition_absent_0_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "assert",
+      "expect": { "status": "assessed", "auMax": { "whiskers": 1 } },
+      "note": "Whiskers loose and curved. Reference for whiskers = 0. NOTE: whiskers is the WEAKEST AU across six studies (ICC 0.35-0.55) and the one that drifted upward under underexposure in the V0.1 probe. Watch this row above all others."
+    },
+    {
+      "id": "fgs-whiskers-1",
+      "file": "whiskersposition_moderatelypresent_1_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "observe"
+    },
+    {
+      "id": "fgs-whiskers-2",
+      "file": "whiskersposition_markedlypresent_2_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "assert",
+      "expect": { "status": "assessed", "auMin": { "whiskers": 1 } },
+      "note": "Whiskers straight and forward. Reference for whiskers = 2. SAME TABBY/SESSION as fgs-ears-2 and fgs-eyes-2."
+    },
+
+    {
+      "id": "fgs-head-0",
+      "file": "headposition_absent_0_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "observe",
+      "note": "UNTESTABLE, demoted from assert. Head position is scored relative to the SHOULDER LINE, and this reference is a tight face crop with the shoulders out of frame, so the discriminating feature is not in the image. Recorded only. Worth watching whether the model returns null (correct abstention) or a confident score (over-confidence)."
+    },
+    {
+      "id": "fgs-head-1",
+      "file": "headposition_moderatelypresent_1_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "observe"
+    },
+    {
+      "id": "fgs-head-2",
+      "file": "headposition_markedlypresent_2_sample1.png",
+      "group": "fgs-sensitivity",
+      "mode": "observe",
+      "note": "UNTESTABLE, demoted from assert. Same crop problem as fgs-head-0: head position needs the shoulder line, which is not in frame. The 2026-09 run scored head=1 here with 3/3 agreement - a confident answer to an unanswerable question, which is a calibration signal, not an accuracy one."
+    }
+  ]
+}

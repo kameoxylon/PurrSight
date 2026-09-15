@@ -218,6 +218,27 @@ function reject(reason: RejectionReason): AssessResult {
   return { status: 'rejected', reason, ...REJECTION_COPY[reason] };
 }
 
+/**
+ * The too-small-to-read rejection, raised BEFORE the model is called.
+ *
+ * It reuses `image_quality` rather than adding a reason to the frozen contract
+ * — RejectionCard's heading for it ("This photo was hard to read") fits — but
+ * the generic copy above talks about blur and darkness, which would be actively
+ * misleading here. The user's problem is resolution and the fix is different.
+ */
+export function rejectImageTooSmall(width: number, height: number): AssessResult {
+  return {
+    status: 'rejected',
+    reason: 'image_quality',
+    message: `That photo is too small to assess — it came through at ${width}x${height} pixels.`,
+    retakeTips: [
+      'Upload the original photo rather than a thumbnail, screenshot, or profile picture.',
+      'If you cropped it, try a wider crop that keeps more of the original detail.',
+      'Get closer to your cat instead of zooming in and cropping afterwards.',
+    ],
+  };
+}
+
 /* ===========================================================================
  * Aggregation — the entry point scoring-wise
  * =========================================================================== */
