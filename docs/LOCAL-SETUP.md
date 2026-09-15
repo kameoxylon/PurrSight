@@ -131,6 +131,28 @@ the higher number. See `docs/MODEL-ACCESS.md`.
 
 ---
 
+## 6. Optional: the "vets near me" map
+
+`NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY` enables the embedded map in *What we
+recommend*. **You do not need it.** Leave it blank and that section falls back
+to a plain Google Maps link, which is what the app did before the map existed —
+nothing breaks and the demo is unaffected.
+
+If you do set it, two things are easy to get wrong:
+
+- The `NEXT_PUBLIC_` prefix is deliberate. The Maps Embed API key is read by the
+  browser, so Next inlines it into the client bundle **at build time**. It is
+  public by design — restrict it in Google Cloud Console to the *Maps Embed API*
+  and to your hostnames (`http://localhost:3000/*` for local). Never paste an
+  unrestricted key here.
+- Because it is inlined at build time, changing it in App Service needs a
+  **rebuild**, not just a restart.
+
+The map never asks for your location on page load — only when you tap
+*Show vets near me*. Denying the prompt falls back to the link.
+
+---
+
 ## Troubleshooting
 
 | What you see | What it means |
