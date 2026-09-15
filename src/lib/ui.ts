@@ -2,7 +2,7 @@
  * Person A UI constants and helpers. This file is A-owned and never imports
  * from lib/assess. It only depends on the frozen contract types.
  */
-import type { ActionUnitId, Band } from './contract';
+import type { ActionUnitId, Band, Caveat } from './contract';
 
 /**
  * Inter-rater reliability from the FGS validation study (Evangelista et al.
@@ -63,4 +63,28 @@ export const BAND_STYLES: Record<Band, BandStyle> = {
 export function scoreLabel(score: 0 | 1 | 2 | null): string {
   if (score === null) return 'Not assessable';
   return { 0: 'Relaxed (0)', 1: 'Some tension (1)', 2: 'Marked tension (2)' }[score];
+}
+
+/**
+ * Caveats arrive in one array but are two different kinds of statement, and
+ * showing them together buries the one that matters.
+ *
+ * `acute_pain_only` is a property of the SCALE. scoring.ts emits it for every
+ * assessment with identical wording, so it is boilerplate — it goes under the
+ * gauge as a quiet scope note.
+ *
+ * Everything else describes THIS photo (`low_agreement` even names the features
+ * the runs disagreed on), so it is a confidence signal and belongs beside the
+ * feature cards it refers to. Unknown future kinds fall in with the
+ * photo-specific ones: over-showing a caveat is the safe failure, silently
+ * dropping one is not.
+ */
+export function splitCaveats(caveats: Caveat[]): { scope: Caveat[]; photo: Caveat[] } {
+  const scope: Caveat[] = [];
+  const photo: Caveat[] = [];
+  for (const caveat of caveats) {
+    if (caveat.kind === 'acute_pain_only') scope.push(caveat);
+    else photo.push(caveat);
+  }
+  return { scope, photo };
 }

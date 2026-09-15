@@ -144,7 +144,7 @@ describe('buildResultPdf', () => {
     const bytes = await buildResultPdf(painful);
     const drawn = extractDrawnText(bytes);
 
-    expect(drawn).not.toContain('Find a vet near me');
+    expect(drawn).not.toContain('Find a vet');
     expect(asText(bytes)).not.toContain('google.com/maps');
     // The advice itself must survive - only the tap target goes.
     expect(drawn).toContain('veterinarian');
@@ -155,10 +155,33 @@ describe('buildResultPdf', () => {
     expect(drawn).toContain('not a diagnostic tool');
   });
 
-  it('renders caveats under "Things to keep in mind"', async () => {
-    const drawn = extractDrawnText(await buildResultPdf(painful));
-    expect(painful.caveats.length).toBeGreaterThan(0);
-    expect(drawn).toContain('Things to keep in mind');
+  it('splits caveats: scale scope under the score, photo caveats with the features', async () => {
+    const drawn = extractDrawnText(await buildResultPdf(partial));
+    const scope = partial.caveats.find((c) => c.kind === 'acute_pain_only');
+    const photo = partial.caveats.find((c) => c.kind === 'low_agreement');
+    expect(scope).toBeDefined();
+    expect(photo).toBeDefined();
+
+    // Long messages wrap across drawn lines, so match a distinctive opening run.
+    const opening = (text: string) => text.split(' ').slice(0, 6).join(' ');
+    const scopeAt = drawn.indexOf(opening(scope!.message));
+    const photoAt = drawn.indexOf(opening(photo!.message));
+
+    // Neither kind is dropped by the split.
+    expect(scopeAt).toBeGreaterThan(-1);
+    expect(photoAt).toBeGreaterThan(-1);
+
+    const scoreAt = drawn.indexOf('Score');
+    const recommendAt = drawn.indexOf('What we recommend');
+    const featuresAt = drawn.indexOf('Facial features we looked at');
+    expect(scoreAt).toBeLessThan(recommendAt);
+    expect(recommendAt).toBeLessThan(featuresAt);
+
+    // Scope note rides with the score; the photo caveat sits with the features
+    // it describes.
+    expect(scopeAt).toBeGreaterThan(scoreAt);
+    expect(scopeAt).toBeLessThan(recommendAt);
+    expect(photoAt).toBeGreaterThan(featuresAt);
   });
 
   it('handles an assessment with unscorable action units', async () => {
