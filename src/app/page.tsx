@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import type { AssessResult } from '@/lib/contract';
 import UploadCard from '@/components/UploadCard';
 import ResultPanel from '@/components/ResultPanel';
@@ -8,7 +8,7 @@ import RejectionCard from '@/components/RejectionCard';
 import ErrorCard from '@/components/ErrorCard';
 import Disclaimer from '@/components/Disclaimer';
 import PawLogo from '@/components/PawLogo';
-import { downloadResultImage } from '@/lib/download-image';
+import { downloadResultPdf } from '@/lib/download-pdf';
 
 type Phase = 'idle' | 'loading';
 
@@ -16,7 +16,8 @@ export default function Home() {
   const [phase, setPhase] = useState<Phase>('idle');
   const [result, setResult] = useState<AssessResult | null>(null);
   const [lastBlob, setLastBlob] = useState<Blob | null>(null);
-  const resultRef = useRef<HTMLDivElement>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState(false);
 
   async function assess(blob: Blob) {
     setLastBlob(blob);
@@ -49,7 +50,7 @@ export default function Home() {
   const showUpload = phase === 'idle' && result === null;
 
   return (
-    <div className="relative z-10 mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-10 sm:py-14">
+    <div className="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col px-4 pt-10 pb-3.5 sm:pt-14">
       <header className="text-center">
         <div className="inline-flex items-center gap-3">
           <span
@@ -76,15 +77,27 @@ export default function Home() {
 
         {phase === 'idle' && result?.status === 'assessed' && (
           <div className="space-y-6">
-            <div ref={resultRef}>
-              <ResultPanel assessment={result.assessment} />
-            </div>
+            <ResultPanel assessment={result.assessment} />
             <div className="flex flex-wrap justify-center gap-3">
               <button
-                onClick={() => downloadResultImage(resultRef.current)}
-                className="rounded-full bg-brand px-6 py-2.5 text-sm font-semibold text-brand-ink transition hover:bg-brand-hover"
+                onClick={async () => {
+                  setPdfBusy(true);
+                  setPdfError(false);
+                  try {
+                    await downloadResultPdf(result.assessment);
+                  } catch (err) {
+                    // Without this the promise rejects unhandled and the button
+                    // just snaps back to idle, looking like a dead control.
+                    console.error('[pdf] failed to build the report', err);
+                    setPdfError(true);
+                  } finally {
+                    setPdfBusy(false);
+                  }
+                }}
+                disabled={pdfBusy}
+                className="rounded-full bg-brand px-6 py-2.5 text-sm font-semibold text-brand-ink transition hover:bg-brand-hover disabled:opacity-60"
               >
-                Download results
+                {pdfBusy ? 'Preparing PDF…' : 'Download results (PDF)'}
               </button>
               <button
                 onClick={reset}
@@ -93,6 +106,11 @@ export default function Home() {
                 Assess another photo
               </button>
             </div>
+            {pdfError && (
+              <p className="text-center text-sm text-rose-600 dark:text-rose-400">
+                We couldn&apos;t build the PDF. Your results are still shown above.
+              </p>
+            )}
           </div>
         )}
 

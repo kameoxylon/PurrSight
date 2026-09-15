@@ -1,9 +1,11 @@
 /**
- * "Find a vet near me" — opens Google Maps searching for nearby veterinary
- * hospitals. Uses a plain maps URL (the browser supplies the user's location),
- * so there is NO API key, no cost, and nothing to configure for deployment.
+ * "Find a vet near me" — opens a Google Maps search for nearby veterinary
+ * hospitals in a new tab. Uses a plain maps URL with no API key and no cost.
+ *
+ * This is also the fallback for VetMap, which shows an embedded map when a
+ * Maps Embed API key is configured and the user shares their location.
  */
-const VET_MAPS_URL = 'https://www.google.com/maps/search/veterinarian+near+me';
+import { VET_MAPS_URL } from '@/lib/vet-map';
 
 export default function VetLink({ variant = 'button' }: { variant?: 'button' | 'plain' }) {
   const className =

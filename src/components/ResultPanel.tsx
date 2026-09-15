@@ -3,8 +3,16 @@ import ScoreDial from './ScoreDial';
 import ActionUnitCard from './ActionUnitCard';
 import CaveatBanner from './CaveatBanner';
 import VetLink from './VetLink';
+import VetMap from './VetMap';
 
-/** Renders a full, successful assessment. */
+/**
+ * Renders a full, successful assessment.
+ *
+ * Section order is deliberate: the caveats come before the number so the
+ * limitations are read first rather than as a footnote. The rose "may be in
+ * pain" alert stays pinned above everything, because it is the one thing that
+ * should never be scrolled past.
+ */
 export default function ResultPanel({ assessment }: { assessment: Assessment }) {
   const { actionUnits, caveats, recommendation, meta, scorableCount, aboveThreshold } = assessment;
 
@@ -32,17 +40,9 @@ export default function ResultPanel({ assessment }: { assessment: Assessment }) 
         </div>
       )}
 
-      <ScoreDial assessment={assessment} />
-
-      <div className="rounded-2xl border border-line bg-card p-5 shadow-sm">
-        <h2 className="text-sm font-semibold text-ink">What we recommend</h2>
-        <p className="mt-1 text-sm text-muted">{recommendation}</p>
-        <div className="mt-3">
-          <VetLink variant="plain" />
-        </div>
-      </div>
-
       <CaveatBanner caveats={caveats} />
+
+      <ScoreDial assessment={assessment} />
 
       <div>
         <div className="mb-2 flex items-center justify-between">
@@ -55,6 +55,14 @@ export default function ResultPanel({ assessment }: { assessment: Assessment }) 
           {actionUnits.map((au) => (
             <ActionUnitCard key={au.id} au={au} samples={meta.samples} />
           ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-line bg-card p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-ink">What we recommend</h2>
+        <p className="mt-1 text-sm text-muted">{recommendation}</p>
+        <div className="mt-3">
+          <VetMap />
         </div>
       </div>
 
