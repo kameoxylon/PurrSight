@@ -1,18 +1,20 @@
-# FGS Prompt v0 — verified
+# FGS Prompt v0
 
-> ⚠️ **SUPERSEDED by [`PROMPT-V0.1.md`](./PROMPT-V0.1.md).** Retained because every number in
-> [`MODEL-ACCESS.md`](./MODEL-ACCESS.md) was produced by *this* prompt, so deleting it would
-> orphan those results. v0.1 corrects a scoring defect in the abstention rule
-> (`FGS-RESEARCH.md` F1) — **build against v0.1, not this.** v0.1 is unverified until its
-> checklist is run, so this file remains the last prompt actually observed to work.
+The original FGS rubric prompt.
 
-This is the exact prompt and schema that produced every result in
-[`MODEL-ACCESS.md`](./MODEL-ACCESS.md). It is committed so Person B starts from something
-that demonstrably works rather than a blank page. Phase 0 should lift it into
-`src/lib/fgs/prompt.ts` and `src/lib/fgs/schema.ts` more or less as-is.
+This file is self-contained: it specifies the prompt, the schema, and why each part is worded
+the way it is. It does not reference other prompt versions. Differences between versions are
+recorded in [`PROMPT-CHANGE-HISTORY.md`](./PROMPT-CHANGE-HISTORY.md).
+
+> **Status: verified.** This is the exact prompt and schema that produced every result in
+> [`MODEL-ACCESS.md`](./MODEL-ACCESS.md) — it was run against the model and observed to work.
+
+It is committed so Person B starts from something that demonstrably works rather than a blank
+page.
 
 Treat changes to this file the way you'd treat changes to a database migration: if you
 edit the prompt or the schema, the eval numbers from before the edit no longer apply.
+Set `meta.promptVersion = "v0"` so results stay attributable.
 
 ---
 
@@ -109,7 +111,7 @@ inadequate: status="rejected", set rejectionReason, and actionUnits=null.
 
 ---
 
-## Things in here that are load-bearing
+## Things that are load-bearing
 
 Each of these was arrived at by getting it wrong first. Don't quietly undo them.
 
@@ -141,7 +143,7 @@ plausible-looking score.
 
 ---
 
-## Two things this prompt does *not* fix
+## Scope — what this prompt does not address
 
 **Abstention is inconsistent.** It fires roughly **1 run in 3** on the same image, so
 call the model **3× and take the mode per action unit**, treating an AU as unscorable
@@ -154,7 +156,7 @@ future model actually calibrates — but **do not render it in the UI.** See fin
 
 ---
 
-## Proposed v0.1 extension — NOT YET VERIFIED ⚠️
+## Proposed extension — NOT YET VERIFIED ⚠️
 
 Everything above this line was run against the model and observed to work. **This section
 was not.** It is written down so it isn't lost, and must be tested before anything depends
@@ -162,15 +164,18 @@ on it. Do not fold it into the verified schema until it has been run 3× like ev
 
 `contract.ts` declares two caveat kinds — `brachycephalic` and `dark_coat` — that nothing
 can currently populate, because the schema returns no information about the cat itself.
-They exist for good reason: the FGS validation **explicitly excluded brachycephalic
-breeds**, and automated landmarking failed on black cats. Those are real limits on when
-our output means anything, and silently dropping them would overstate what we can claim.
+They exist for good reason: both name real limits on when our output means anything, and
+silently dropping them would overstate what we can claim.
 
-> ❌ **The brachycephalic sentence above is wrong** — see `FGS-RESEARCH.md` F10. P1 says
-> those breeds "were not included", and the one Persian and one Himalayan recruited were
-> dropped **for poor image quality**, not by design; the authors state transferability is
-> unknown. Corrected wording is in [`PROMPT-V0.1.md`](./PROMPT-V0.1.md). Do not ship the
-> sentence above.
+Stated accurately (see `FGS-RESEARCH.md` F10 — an earlier draft of this paragraph claimed
+brachycephalic breeds were "explicitly excluded", which is wrong and must not be shipped):
+
+- **Brachycephalic:** P1 says those breeds **"were not included"**. One Persian and one
+  Himalayan were recruited but dropped **for poor image quality**, not by design, and the
+  authors state it is **"not known if"** the scale transfers. The honest claim is
+  *unvalidated on flat-faced breeds*, not *excluded by design*.
+- **Dark coats:** P1 excluded black cats because facial landmarks could not be identified
+  in their faces, and reports the same difficulty for dark-coated horses.
 
 Proposed additional top-level property (add `"imageContext"` to `required` as well):
 

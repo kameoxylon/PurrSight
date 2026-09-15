@@ -82,7 +82,7 @@ describe('prompt content invariants', () => {
     expect(carveOut).toBeGreaterThan(divider);
   });
 
-  it('still carries the published score-2 anchors it inherited', () => {
+  it('still carries the published score-2 anchors', () => {
     expect(SYSTEM_PROMPT).toMatch(/less than 50% of the eye's width/);
     expect(SYSTEM_PROMPT).toMatch(/standing on end \(spiked\)/);
     expect(SYSTEM_PROMPT).toMatch(/elliptical shape/);

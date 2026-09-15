@@ -1,87 +1,57 @@
-# FGS Prompt v0.2 — measured, and its main hypothesis falsified ⚠️
+# FGS Prompt v0.2
 
-Supersedes [`PROMPT-V0.1.md`](./PROMPT-V0.1.md), which stays in the repo because it is the
-prompt every number in [`../eval/README.md`](../eval/README.md) was produced by.
+The prompt PurrSight uses to score a cat photo against the Feline Grimace Scale (FGS).
 
-Unlike v0.1, this revision is **driven by observed behaviour rather than by document review**.
-v0.1 was written from the literature and never run; the `eval/` harness has now run it against
-`gpt-4.1` on a 40-image generated corpus and a 15-image Feline Grimace Scale reference probe.
-Every change below names the eval finding that motivated it.
+This file is self-contained: it specifies the prompt, explains why it is worded the way it is,
+and reports what it measured. It does not reference other prompt versions. Differences between
+versions are recorded in [`PROMPT-CHANGE-HISTORY.md`](./PROMPT-CHANGE-HISTORY.md).
 
-Per the standing migration rule, **v0.1's numbers do not carry over.** Set
-`meta.promptVersion = "v0.2"` so results stay attributable.
+Set `meta.promptVersion = "v0.2"` on every result produced by this prompt. That field is a
+measurement label (see `src/lib/contract.ts`) — two results carrying different values were
+produced by different instruments and are not comparable.
 
-> **Bottom line, up front:** v0.2 has been run, and **its central hypothesis did not hold.**
-> Rewriting the muzzle and whiskers level-1 descriptors in prose did *not* stop the model
-> collapsing level 1 to 0. The revision is kept because it is non-inferior and fixes a
-> separate severe-muzzle miss, **not** because it worked. Full numbers in
-> [Results](#results--it-failed-criteria-1-and-2-) below. Do not cite v0.2 as having fixed
-> under-scoring.
+> **Status: measured, and its central hypothesis did not hold.** v0.2 set out to stop the model
+> collapsing FGS level 1 to 0 by writing the level-1 descriptors more operationally. It did not
+> work. The prompt is kept because it is non-inferior everywhere and better in one place, not
+> because it succeeded. **Do not describe v0.2 as having fixed under-scoring.** Numbers in
+> [Results](#results).
 
 ---
 
-## ⚠️ Read this before assuming v0.1 was wrong
+## Request envelope
 
-The two lines this revision rewrites — muzzle level 1 and whiskers level 1 — were **faithful
-to the published scale**. They trace back through v0.1 to v0 unchanged:
+```
+POST {endpoint}/openai/deployments/{deployment}/chat/completions?api-version={version}
+Authorization: Bearer <Entra token>
+Content-Type: application/json
+```
 
-| Level | v0.1 wording | Provenance |
-|---|---|---|
-| muzzle 1 | `mild tension` | published FGS intermediate descriptor |
-| whiskers 1 | `slightly curved or straight` | published FGS intermediate descriptor |
+```jsonc
+{
+  "messages": [
+    { "role": "system", "content": "<the system prompt below>" },
+    { "role": "user", "content": [
+      { "type": "text", "text": "Assess this image using the Feline Grimace Scale." },
+      { "type": "image_url", "image_url": { "url": "data:image/jpeg;base64,<...>" } }
+    ]}
+  ],
+  "max_tokens": 1000,
+  "temperature": 0,
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": { "name": "fgs_assessment", "strict": true, "schema": { /* see contract.ts */ } }
+  }
+}
+```
 
-So this is **not a correction of a misquote.** It is a deliberate decision to add operational
-detail that the published scale leaves to its *image* manual rather than to its text. Human
-raters are trained against reference photographs; a zero-shot model only ever sees the words.
-The words alone turn out to underspecify the intermediate level, and the model collapses it.
+Downscale to **1024 px on the long edge** before encoding: it halves token count, cuts latency
+roughly 30%, and avoids an intermittent `500 server_error` on multi-megabyte payloads. Images
+whose short edge is under 200 px are rejected in code before reaching the model — see
+`src/lib/assess/image-dimensions.ts` and the resolution ladder in
+[`../eval/README.md`](../eval/README.md).
 
-F13 is the licence for doing this at all: a training intervention more than **doubled** human
-muzzle agreement (ICC 0.30 → 0.76) without changing the scale, and FGS-RESEARCH.md already
-concluded that *"better rubric detail in our prompt is the legitimate analogue."* F8's
-50%-of-eye-width rule, added in v0.1, is the existing precedent for putting operational detail
-into the prompt that the prose definition omits.
-
-**The cost of the deviation:** our level-1 wording is now ours, not the scale's. If anyone
-validates PurrSight against the official manual, this is the first place the two will differ.
-
----
-
-## What changed, and why
-
-| # | Change | Motivated by |
-|---|---|---|
-| 1 | `muzzle` level 1 moved onto the **shape** axis, and explicitly continuous with level 2 | Eval: muzzle is bimodal — 20 zeros, 8 ones, 3 twos corpus-wide; scored `0` on a labelled `muzzle=1` reference |
-| 2 | `whiskers` level 0/1 **lexically disambiguated** on the relaxed droop, without lowering the level-1 bar | Eval: `curved` appeared in both 0 and 1, so the levels overlapped as text |
-| 3 | New rule: whiskers must be scored **from whiskers you can actually see**, never inferred from the surrounding face | Eval 🟡: `grey-occl-muzzle` scored `whiskers = 1` on a **painted-over** region |
-
-The schema is **unchanged**, and so is every other action unit. As in v0.1, that is deliberate:
-it keeps this revision to prompt text so an observed behaviour change is attributable to
-wording rather than to a new decoding grammar.
-
----
-
-## Why muzzle and whiskers are NOT treated symmetrically
-
-Both collapsed toward 0 in the eval, so the naive fix is to make both more sensitive. **That
-would be a mistake**, and F16 (P5 Table 4) says why:
-
-| AU | Sensitivity | Specificity | What that makes it |
-|---|---|---|---|
-| Muzzle tension | 0.63 | **0.95** | a **rule-in** feature — present is strong evidence, absent means little |
-| Whiskers change | **0.93** | 0.65 | a **rule-out** feature — and the scale's main false-positive source |
-
-Raising muzzle's level-1 sensitivity is therefore well-supported: when the model does call
-muzzle tension, that call is trustworthy, and F17 ranks muzzle the *worst-predicted* AU
-(MSE 0.3134), so it has the most headroom.
-
-Raising whiskers' sensitivity is the opposite of supported. Whiskers is the weak AU in **six**
-independent studies (F20): worst specificity (0.65), worst inter-rater ICC (0.55), highest
-expert-unscorable rate (10.2%, 46× the ear rate), and P6's ablation showed dropping every
-whisker-derived feature costs 1.46 points of accuracy and **zero** AUROC.
-
-Our own eval reproduced the predicted failure: the model scored `whiskers = 1` on a region
-that had been painted over. So change 2 **disambiguates** whiskers without moving the bar, and
-change 3 pushes unresolvable whiskers toward `null` — the direction the evidence supports.
+Each assessment makes **three** calls and aggregates them; `temperature: 0` is documented
+non-deterministic, so the spread across samples is used as an agreement signal.
 
 ---
 
@@ -144,125 +114,198 @@ If there is no cat, the face is not visible, there are multiple cats, or quality
 inadequate: status="rejected", set rejectionReason, and actionUnits=null.
 ```
 
-Everything outside the three changed blocks is byte-identical to v0.1.
+---
+
+## JSON Schema
+
+Sent as `response_format.json_schema` with `strict: true`. Reproduced here so this file is
+self-contained; the executable copy is `FGS_JSON_SCHEMA` in `src/lib/assess/schema.ts`.
+
+```json
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "rejectionReason", "actionUnits"],
+  "properties": {
+    "status": { "type": "string", "enum": ["assessed", "rejected"] },
+    "rejectionReason": {
+      "type": ["string", "null"],
+      "enum": ["no_cat_detected", "face_not_visible", "image_quality", "multiple_cats", null]
+    },
+    "actionUnits": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "score", "notScorableReason", "evidence", "confidence"],
+        "properties": {
+          "id": { "type": "string", "enum": ["ears", "eyes", "muzzle", "whiskers", "head"] },
+          "score": { "type": ["integer", "null"], "enum": [0, 1, 2, null] },
+          "notScorableReason": { "type": ["string", "null"] },
+          "evidence": { "type": "string" },
+          "confidence": { "type": "number" }
+        }
+      }
+    }
+  }
+}
+```
+
+Three things here are load-bearing, each arrived at by getting it wrong first:
+
+1. **`strict: true`, not `{"type":"json_object"}`.** `json_object` guarantees valid JSON, not
+   *your* JSON — without strict mode the model returned a paragraph of prose inside the
+   `rejectionReason` enum field. Strict mode enforces the schema as a decoding grammar
+   server-side, making that failure structurally impossible rather than merely unlikely.
+2. **Every property must appear in `required`.** Strict mode forbids optional properties;
+   express "may be absent" as **nullable** instead.
+3. **Mixed-type nullable enums are how abstention is expressed** —
+   `{"type": ["integer","null"], "enum": [0,1,2,null]}`, with no separate boolean flag.
+
+Note that `too_few_scorable_aus` is deliberately absent from `rejectionReason`: that reason is
+**ours**, derived after aggregation because only we know how many action units survived the
+vote. The model never emits it.
+
+---
+
+## Why the rubric reads the way it does
+
+### Muzzle and whiskers are treated asymmetrically, on purpose
+
+Both are hard AUs that the model tends to score 0. The obvious move is to make both more
+sensitive. **That would be a mistake**, because the two fail in opposite directions (F16):
+
+| AU | Sensitivity | Specificity | What that makes it |
+|---|---|---|---|
+| Muzzle tension | 0.63 | **0.95** | a **rule-in** feature — present is strong evidence, absent means little |
+| Whiskers change | **0.93** | 0.65 | a **rule-out** feature — and the scale's main false-positive source |
+
+Muzzle's level-1 descriptor is therefore written to be *reachable*: it places level 1 on the
+same shape axis as level 2 and says explicitly that a partial flattening is a 1, not a 0. When
+this model calls muzzle tension the call is trustworthy, and F17 ranks muzzle the
+worst-predicted AU (MSE 0.3134), so it has the most headroom.
+
+Whiskers gets the opposite treatment. It is the weak AU in **six** independent studies (F20):
+worst specificity (0.65), worst inter-rater ICC (0.55), highest expert-unscorable rate (10.2%,
+46× the ear rate), and P6's ablation showed that dropping every whisker-derived feature costs
+1.46 points of accuracy and **zero** AUROC. Its levels are worded to be *unambiguous* — level 0
+anchored on the relaxed droop, level 1 on its absence — without lowering the bar, and the
+visibility paragraph pushes unresolvable whiskers toward `null` rather than 1.
+
+### The level-1 wording is ours, not the published scale's
+
+The published FGS gives short intermediate descriptors (`mild tension` for muzzle,
+`slightly curved or straight` for whiskers) and teaches the rest through a reference *image*
+manual. A zero-shot model only ever sees the words. The elaborations here add the operational
+detail that the manual would otherwise supply.
+
+Precedent for doing this: F13 found that a training intervention more than **doubled** human
+muzzle agreement (ICC 0.30 → 0.76) without altering the scale itself.
+
+**The cost:** if anyone validates PurrSight against the official manual, the level-1 wording is
+the first place the two will differ.
 
 ---
 
 ## Things that are load-bearing
 
-Carried forward from v0.1, and still true:
+Do not "tidy" any of the following. Each was arrived at by getting it wrong first.
 
-- **The whitespace alignment of the action-unit block is part of what the model reads.** The
-  continuation lines in `muzzle` and `whiskers` are indented to the same column as the score
-  text above them, not to the hyphen.
-- **`THESE TWO CASES ARE DIFFERENT`** separates the 1-vs-null distinction (F1). Do not move the
-  new whiskers paragraph above it — the general null rule has to be established first, so the
-  whiskers rule reads as the carve-out it is.
-- **The new whiskers paragraph sits *after* "Null is uncommon"** deliberately. That paragraph
-  ends on "do not reach for null to avoid committing to a score", and whiskers is the one
-  documented exception to it. Order matters.
-- `"confidence"` stays in the schema **unrendered**, as a canary. F6 showed the model recites
-  published inter-rater ICCs when asked for confidence.
+- **The whitespace alignment of the action-unit block is part of what the model reads.**
+  Continuation lines in `muzzle` and `whiskers` align to the score text above them, not to the
+  hyphen.
+- **`THESE TWO CASES ARE DIFFERENT`** separates the 1-vs-null distinction (F1), which is the
+  single most consequential rule in the prompt. Abstention is drawn on **visibility**, never on
+  certainty: a visible-but-ambiguous feature is a `1`. Drawing it on certainty instead lets an
+  ambiguous AU drop out of the denominator and flip the recommendation — ears 2, eyes 1, muzzle
+  0, head 0, whiskers ambiguous gives `3/8 = 0.375` (below the analgesia threshold) as a null
+  but `4/10 = 0.400` (above it) as a 1.
+- **The whiskers visibility paragraph sits *after* "Null is uncommon"**, which ends on "do not
+  reach for null to avoid committing to a score". Whiskers is the one documented exception to
+  that instruction, so it has to follow it to read as a carve-out rather than a contradiction.
+- **The null base rates are measured, not invented** — expert raters, roughly 1 image in 6
+  overall, concentrated in whiskers and muzzle (F3). A blanket "expect one null" invites the
+  model to abstain on `eyes`, which experts never do.
+- **`"confidence"` stays in the schema but is never rendered**, as a canary: F6 showed the
+  model reciting published inter-rater ICCs when asked for confidence. The value actually shown
+  to users is the measured cross-sample agreement.
 
-## Deliberately NOT changed in v0.2
+---
 
-| Not changed | Why |
+## Scope — what this prompt does not address
+
+| Not addressed | Why |
 |---|---|
-| `head` level 1/2 | Our head reference images are **tight face crops with the shoulders out of frame**, so head is unmeasurable until `underscoring` lands uncropped images. Changing it now would be unfalsifiable. |
-| Degraded-image upward drift | Measured by a different case group, and plausibly a preprocessing problem rather than a rubric one. Bundling it would make the muzzle delta unattributable. |
-| `ears`, `eyes` | Both already track their labelled references correctly. They are the **control** for this revision. |
-| Few-shot reference images | Blocked on licence permission, and would confound a text-only delta. Never bundle it with a wording change. |
+| `head` level 1/2 wording | Head position is scored against the **shoulder line**, and our head reference images are tight face crops with the shoulders out of frame. Head scoring is therefore unmeasurable on current data, and any change would be unfalsifiable. Needs uncropped images first. |
+| Upward score drift on degraded images | Underexposed and low-contrast photos drift up rather than down. Measured by a separate case group and plausibly a preprocessing problem rather than a rubric one. |
+| Few-shot reference images | Would confound a text-only measurement, and the FGS reference images are licence-restricted. |
 
 ---
 
-## Success criteria — stated before the run
+## Success criteria — written before the run
 
-A v0.2 that does not meet all four is not an improvement, regardless of what else moves:
+Four criteria, fixed in advance so the outcome could not be reinterpreted afterwards:
 
-1. `muzzle` scores **1** on the labelled `muzzle=1` reference it previously scored 0.
-2. `whiskers` scores **1** on the labelled `whiskers=1` reference it previously scored 0.
-3. **`comfortable` stays 5/5.** This is the regression canary — it is the only group that
-   proves the prompt does not invent pain in a relaxed cat. A v0.2 that finds muzzle tension
-   by making everything slightly tense has failed, not succeeded.
-4. `ears` and `eyes` are unchanged on every reference they already passed.
+1. `muzzle` scores **1** on the labelled `muzzle=1` reference.
+2. `whiskers` scores **1** on the labelled `whiskers=1` reference.
+3. **`comfortable` stays 5/5.** The regression canary — the only group that proves the prompt
+   does not invent pain in a relaxed cat. A prompt that finds muzzle tension by making
+   everything slightly tense has failed, not succeeded.
+4. `ears` and `eyes` unchanged on every reference they already passed.
 
-Watch, but do not gate on: `grey-occl-muzzle` whiskers moving `1 → null` (change 3 working),
-and the corpus-wide muzzle histogram becoming less bimodal.
-
-**Honest limit on all of this:** the reference probe carries **one labelled AU per image and no
-ground-truth total**, several severe-level images are the same animal in the same session, and
-n is small. These criteria test whether specific known misreads improve. They do **not**
-establish accuracy, a threshold, or a false-negative rate, and no result here should be
-described as validating the scale.
+**Honest limit:** the reference probe carries **one labelled AU per image and no ground-truth
+total**, several severe-level images are the same animal photographed in one session, and n is
+small. These criteria test whether specific known misreads improve. They do **not** establish
+accuracy, a threshold, or a false-negative rate, and nothing here validates the scale.
 
 ---
 
-## Results — it failed criteria 1 and 2 🔴
+## Results
 
-Run: 55 cases, `--concurrency 1`, `gpt-4.1`. **34/35 asserted passed, 0 errored.** That ratio
-is not the story, and is not comparable to v0.1's `24/29` — the denominator changed when the
-`resolution-boundary` group was added. Compare the criteria instead:
+Run: 55 cases, `--concurrency 1`, `gpt-4.1` (`2025-04-14`). **34/35 asserted case-runs passed,
+20 observed, 0 errored.** That ratio is not the story — the criteria are:
 
 | # | Criterion | Result |
 |---|---|---|
-| 1 | `muzzle` scores 1 on the labelled `muzzle=1` reference | 🔴 **failed** — still `0` |
-| 2 | `whiskers` scores 1 on the labelled `whiskers=1` reference | 🔴 **failed** — still `0` |
+| 1 | `muzzle` scores 1 on the labelled `muzzle=1` reference | 🔴 **failed** — scored `0` |
+| 2 | `whiskers` scores 1 on the labelled `whiskers=1` reference | 🔴 **failed** — scored `0` |
 | 3 | `comfortable` stays 5/5 | ✅ held |
-| 4 | `ears` / `eyes` unchanged on references they passed | ✅ held (`ears=1`, `eyes=1`) |
+| 4 | `ears` / `eyes` unchanged | ✅ held (`ears=1`, `eyes=1`) |
 
-Across the 31 assessed cases v0.2 returns **muzzle `0` ×17, `1` ×8, `2` ×3, `null` ×3** —
-muzzle `1` is still very much the minority call.
+Across the 31 assessed cases the muzzle histogram is **`0` ×17, `1` ×8, `2` ×3, `null` ×3** —
+level 1 remains very much the minority call.
 
-⚠️ **That histogram is deliberately not differenced against v0.1's.** v0.1 ran a 34-image
-corpus, v0.2 runs 40, and a different subset is gated before the model ever sees it, so the
-two are not the same population — subtracting them would manufacture a finding out of a
-denominator change. The two labelled references in the table above are the apples-to-apples
-comparison, and neither moved.
+### What this establishes
 
-One genuine change the nulls do show: three muzzle abstentions now appear on the occlusion
-cases where v0.1 returned invented scores. That is change 3 working.
+**Rewriting the level-1 descriptors in prose does not make the model detect level-1 features.**
+The model reads the elaborated wording and still returns 0. That is a real result: the
+bottleneck was not vague words. The cheap hypothesis has been tested and ruled out, which is
+what makes visual reference anchors the evidence-backed next step — human raters learn the
+intermediate level from reference *photographs*, and F13's training gain came from images, not
+better prose.
 
-### What this actually establishes
+### What worked
 
-**Rewriting the level-1 descriptor in prose does not make the model detect level-1 features.**
-That is a real result, and a useful one: the bottleneck is not that the words were vague. The
-model reads the elaborated wording and still returns 0. Words were the cheap hypothesis; they
-have now been tested and they are not sufficient.
-
-This converts `fewshot-guides` from a speculative idea into the **evidence-backed** next step.
-Human raters learn the intermediate level from reference *photographs* — F13's training
-intervention doubled muzzle ICC using images, not better prose. We have now shown from our own
-data that the text-only analogue does not reproduce that gain.
-
-### What did improve
-
-- `fgs-muzzle-2`, the labelled **severe** muzzle reference and v0.1's *only* assertion failure,
-  moved **`0` → `1`**. Direction right, magnitude still short. This is why `fgs-sensitivity`
-  reads 8/8 rather than 7/8 — a pass on a tolerance band, not an exact match.
-- No regressions anywhere. `tabby-dim18` even settled `0.30` → `0.20`.
-- Change 3 (whiskers-null rule) works on `tabby-occl-muzzle` and `calico-occl-muzzle`, which
-  now return `muzzle=null, whiskers=null` rather than inventing a score.
+- `fgs-muzzle-2`, the labelled **severe** muzzle reference, scores `1`. Right direction,
+  magnitude still short; it passes on a tolerance band, not an exact match.
+- `tabby-occl-muzzle` and `calico-occl-muzzle` return `muzzle=null, whiskers=null` rather than
+  inventing a score — the whiskers visibility rule doing its job.
+- The `comfortable` canary held at 5/5. The prompt does not manufacture pain in relaxed cats.
 
 ### What did not
 
-`grey-occl-muzzle` **still scores `whiskers = 1` on a painted-over region** — the single
-remaining assertion failure, unchanged from v0.1. So the explicit "do not infer whisker
-position from the shape of the face around them" instruction is followed on two of three
-sources and ignored on the third. An instruction that holds 2/3 of the time is not a control.
-Whiskers remains the lowest-trust AU, exactly as F20 predicts.
-
-### Verdict: keep v0.2, but do not describe it as fixing under-scoring
-
-It is retained because it is **non-inferior** on every measured axis, strictly better on
-`fgs-muzzle-2`, and its text now carries the whiskers-null rule. It is **not** retained on the
-grounds that it achieved what it set out to achieve, because it did not. Any summary of this
-work that says "v0.2 fixed the level-1 flattening" is false.
+`grey-occl-muzzle` **scores `whiskers = 1` on a painted-over region** — the single remaining
+assertion failure. The explicit "do not infer whisker position from the shape of the face
+around them" instruction is followed on two of three sources and ignored on the third. **An
+instruction that holds 2/3 of the time is not a control**, and whiskers remains the
+lowest-trust AU, exactly as F20 predicts. Fixing this probably needs a mechanism outside the
+prompt.
 
 ---
 
-
+## Attribution
 
 The Feline Grimace Scale is © Université de Montréal. Scale definitions are used here under
-personal/clinical/educational terms; **no FGS reference image is redistributed in this repo**.
-The level-1 elaborations in this file are **ours**, derived from the findings in
+personal, clinical and educational terms; **no FGS reference image is redistributed in this
+repository.** The level-1 elaborations in this file are **ours**, derived from the findings in
 [`FGS-RESEARCH.md`](./FGS-RESEARCH.md), and are not part of the published scale.

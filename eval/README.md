@@ -99,66 +99,59 @@ What the bounds catch is **inversion**: calling a clearly painful face comfortab
 
 ## Findings — prompt v0.2, gpt-4.1 (40 generated + 15 FGS)
 
-**`34/35` asserted case-runs passed, 20 observed, 0 errored.**
+**`34/35` asserted case-runs passed, 20 observed, 0 errored.** Read the groups, not
+the ratio — the headline number shifts whenever a case group is added, for reasons
+that have nothing to do with the model.
 
-⚠️ **Do not compare that to v0.1's `24/29`.** The denominator changed when the
-`resolution-boundary` group was added, so the ratio moved for reasons that have
-nothing to do with the model. Compare per group, or per case.
+| Group | Result | |
+|---|---|---|
+| `comfortable` | 5/5 | ✅ the canary — does not invent pain in a relaxed cat |
+| `gating` | 13/13 | ✅ includes `tiny96`; fixed in code, not in the prompt |
+| `resolution-boundary` | 6/6 | measures where the gate belongs |
+| `fgs-sensitivity` | 8/8 | ⚠️ includes one tolerance-band pass, not an exact match |
+| `abstention` | 2/3 | 🔴 see below |
 
-### v0.2 vs v0.1 — what actually moved
-
-| Group | v0.1 | v0.2 | |
-|---|---|---|---|
-| `comfortable` | 5/5 | **5/5** | ✅ canary held — still does not invent pain |
-| `gating` (incl. `tiny96`) | 0/3 on `tiny96` | **13/13** | ✅ fixed in code, not in the prompt |
-| `resolution-boundary` | — | **6/6** | new group; measures where the gate belongs |
-| `fgs-sensitivity` | 7/8 | **8/8** | ⚠️ one tolerance-band pass, not an exact match |
-| `abstention` | 2/3 | **2/3** | 🔴 unchanged — see below |
+> **Comparing prompt versions?** Version-to-version deltas — what changed, what it
+> was meant to achieve, and whether it did — live in
+> [`../docs/PROMPT-CHANGE-HISTORY.md`](../docs/PROMPT-CHANGE-HISTORY.md), which is
+> the only file that does that comparison. This section reports what the harness
+> measured for v0.2.
 
 **The headline result is a negative one.** v0.2 rewrote the muzzle and whiskers
-**level-1** descriptors specifically to stop the model collapsing level 1 to 0. It
-did not work:
+**level-1** descriptors specifically to stop the model collapsing level 1 to 0, and
+it did not work — both labelled level-1 references still score `0`:
 
-| Reference | labelled | v0.1 | v0.2 |
-|---|---|---|---|
-| `fgs-muzzle-1` | muzzle = 1 | 0 | **0** |
-| `fgs-whiskers-1` | whiskers = 1 | 0 | **0** |
+| Reference | labelled | scored |
+|---|---|---|
+| `fgs-muzzle-1` | muzzle = 1 | **0** |
+| `fgs-whiskers-1` | whiskers = 1 | **0** |
 
-And on the corpus as a whole, muzzle `1` remains the minority call — across the 31
-assessed cases v0.2 returns **muzzle 0 ×17, 1 ×8, 2 ×3, null ×3**.
-
-⚠️ That histogram is deliberately *not* set against v0.1's. v0.1 ran a 34-image
-corpus and v0.2 runs 40, with a different set gated before the model, so the two
-denominators are not the same population and differencing them would be a
-measurement artifact. **The two labelled references above are the apples-to-apples
-comparison**, and they did not move.
-
-The nulls are worth noting on their own: three muzzle abstentions appear where
-v0.1 reported none on the occlusion cases. That is change 3 working — honest
-abstention replacing an invented score.
+Across the 31 assessed cases, muzzle `1` remains the minority call: **muzzle 0 ×17,
+1 ×8, 2 ×3, null ×3**.
 
 So: **elaborating the rubric in prose does not make the model see the intermediate
-level.** That is worth knowing. It was the cheap hypothesis, it has been tested, and
-it is now ruled out — which makes visual reference anchors (`fewshot-guides`) the
-evidence-backed next step rather than a guess. Full reasoning in
+level.** It was the cheap hypothesis, it has been tested, and it is ruled out — which
+makes visual reference anchors (`fewshot-guides`) the evidence-backed next step
+rather than a guess. Full reasoning in
 [`../docs/PROMPT-V0.2.md`](../docs/PROMPT-V0.2.md).
 
-**What v0.2 did improve:** `fgs-muzzle-2` — the labelled *severe* muzzle reference,
-and v0.1's only assertion failure — moved `0` → `1`. Right direction, still short.
-`tabby-occl-muzzle` and `calico-occl-muzzle` now return `muzzle=null, whiskers=null`
+**What worked:** `fgs-muzzle-2`, the labelled *severe* muzzle reference, scores `1`.
+`tabby-occl-muzzle` and `calico-occl-muzzle` return `muzzle=null, whiskers=null`
 instead of inventing a score.
 
-**What it did not:** `grey-occl-muzzle` still scores `whiskers = 1` on a painted-over
+**What did not:** `grey-occl-muzzle` still scores `whiskers = 1` on a painted-over
 region, despite an explicit instruction not to infer whiskers from the surrounding
 face. Followed on two sources, ignored on the third — an instruction that holds 2/3
 of the time is not a control. Whiskers remains the lowest-trust AU.
 
 ---
 
-## Baseline findings — prompt v0.1, gpt-4.1 (34 generated + 15 FGS)
+## Earlier findings — prompt v0.1, gpt-4.1 (34 generated + 15 FGS)
 
-Retained because v0.2 is measured against it, and because the reasoning below is
-what motivated both the resolution gate and the v0.2 wording.
+Kept because the reasoning below is what motivated the resolution gate and the v0.2
+wording, and because the resolution ladder is still the evidence for
+`MIN_IMAGE_EDGE`. For how v0.1 and v0.2 differ, see
+[`../docs/PROMPT-CHANGE-HISTORY.md`](../docs/PROMPT-CHANGE-HISTORY.md).
 
 `24/29` asserted case-runs passed, 20 observed, 0 errored. The five failures and
 the observations below are the whole point of the exercise — read them, not the

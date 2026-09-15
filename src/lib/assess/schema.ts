@@ -11,9 +11,10 @@
  *                    strict mode is enforced by the provider, and we do not
  *                    want a provider change to silently become a scoring bug.
  *
- * FGS_JSON_SCHEMA is byte-for-byte the schema in docs/PROMPT-V0.1.md, which is
- * itself unchanged from v0 — deliberately, so that any behaviour change on
- * re-run is attributable to prompt wording rather than a new decoding grammar.
+ * FGS_JSON_SCHEMA is byte-for-byte the schema in docs/PROMPT-V0.2.md. The
+ * schema is held fixed across prompt revisions deliberately, so that any
+ * behaviour change on re-run is attributable to prompt wording rather than to
+ * a new decoding grammar.
  *
  * Three things here are load-bearing (each was arrived at by getting it wrong):
  *   1. `strict: true`, not `{"type":"json_object"}`. json_object guarantees

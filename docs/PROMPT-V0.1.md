@@ -1,54 +1,29 @@
-# FGS Prompt v0.1 — run, measured, and superseded by v0.2
+# FGS Prompt v0.1
 
-> **Status note (added after this file was written).** The warning below — "nothing in this
-> file has been run against the model yet" — **is no longer true.** v0.1 *has* been run, by the
-> `eval/` harness, against `gpt-4.1` on a 34-image generated corpus plus a 15-image FGS
-> reference probe. Its results are the baseline section of [`../eval/README.md`](../eval/README.md),
-> and every "v0.1" number quoted anywhere in the repo comes from that run.
->
-> v0.1 is **superseded by [`PROMPT-V0.2.md`](./PROMPT-V0.2.md)**, which is what
-> `src/lib/assess/prompt.ts` now ships. This file is retained because it is the prompt the
-> baseline numbers were produced by, and v0.2 is only interpretable against it.
->
-> The verification checklist below is still the live checklist; it has been *started*, not
-> completed. The original text is left unedited from here down.
+The FGS rubric prompt in which abstention is drawn on **visibility** rather than on certainty.
 
----
+This file is self-contained: it specifies the prompt, the schema, why each part is worded the
+way it is, and what still needs verifying. It does not reference other prompt versions.
+Differences between versions are recorded in
+[`PROMPT-CHANGE-HISTORY.md`](./PROMPT-CHANGE-HISTORY.md).
 
-# FGS Prompt v0.1 — NOT YET VERIFIED ⚠️
+Set `meta.promptVersion = "v0.1"` so results stay attributable — that field is a measurement
+label, and results carrying different values are not comparable.
 
-Supersedes [`PROMPT-V0.md`](./PROMPT-V0.md), which stays in the repo because every number in
-[`MODEL-ACCESS.md`](./MODEL-ACCESS.md) was produced by it.
+> **Status.** This prompt **has been run** against `gpt-4.1` by the `eval/` harness, on a
+> 34-image generated corpus plus a 15-image FGS reference probe; those results are recorded in
+> [`../eval/README.md`](../eval/README.md). The six-step verification checklist below has been
+> **started but not completed** — the abstention probe narrows step 2 without closing it.
 
-**Nothing in this file has been run against the model yet.** v0 earned the word "verified" by
-being executed and observed; this has not. Per v0's own migration rule, **the existing eval
-numbers do not carry over** — they describe v0's behaviour, not this. Do not cite them
-alongside this prompt, and set `meta.promptVersion = "v0.1"` so results stay attributable.
+Research rationale is in [`FGS-RESEARCH.md`](./FGS-RESEARCH.md); finding IDs are referenced
+inline below.
 
-Rationale for every change is in [`FGS-RESEARCH.md`](./FGS-RESEARCH.md); finding IDs are
-referenced inline below.
-
----
-
-## What changed, and why
-
-| # | Change | Finding |
-|---|---|---|
-| 1 | Abstention re-drawn on **visibility**, not certainty. Uncertainty about a *visible* feature is now an explicit **1** | F1 🔴 |
-| 2 | "Expect at least one null" quota **removed**, replaced with the measured expert base rate | F3 🟠 |
-| 3 | `eyes` gains the published **50%-of-width** criterion; `head`'s two triggers **split** | F8 🟡 |
-| 4 | All five AU score-2 definitions restated from P1's verbatim wording | F8 🟡 |
-| 5 | Brachycephalic claim in the proposed extension **corrected** | F10 🟡 |
-
-The schema is **unchanged** from v0. That is deliberate: it keeps this revision to prompt text
-only, so any behaviour change observed on re-run is attributable to wording rather than to a
-new decoding grammar.
+The JSON schema is held fixed deliberately: keeping a revision to prompt text alone means any
+observed behaviour change is attributable to wording rather than to a new decoding grammar.
 
 ---
 
 ## Request envelope
-
-Unchanged from v0.
 
 ```
 POST {endpoint}/openai/deployments/gpt-4.1/chat/completions?api-version=2025-01-01-preview
@@ -135,7 +110,7 @@ inadequate: status="rejected", set rejectionReason, and actionUnits=null.
 
 ## JSON Schema
 
-Byte-for-byte unchanged from v0 — reproduced here so this file is self-contained.
+Byte-for-byte reproduced here so this file is self-contained.
 
 ```json
 {
@@ -169,18 +144,18 @@ Byte-for-byte unchanged from v0 — reproduced here so this file is self-contain
 
 ---
 
-## Why change 1 is the important one
+## Why the abstention rule is the important part
 
-v0 told the model to null anything "not clearly and unambiguously resolvable". That is a
-**certainty** test. The published scale draws the line at **visibility**:
+A **certainty** test ("null anything not clearly and unambiguously resolvable") is the wrong
+line to draw. The published scale draws it at **visibility**:
 
 > "0 = AU is absent; **1 = moderate appearance of the AU, or uncertainty over its presence or
 > absence**; 2 = obvious appearance of the AU; or **'not possible to score' (e.g. if the AU was
 > not clearly visible)**." — P1
 
-So an uncertain-but-visible AU belongs at **1**, and v0 routed it to null instead. Because a
-null is dropped from the denominator rather than scored, this **lowers** the final ratio near
-the decision boundary:
+So an uncertain-but-visible AU belongs at **1**. Routing it to null instead is not neutral:
+because a null is dropped from the denominator rather than scored, it **lowers** the final
+ratio near the decision boundary:
 
 ```
 uncertain AU nulled:   3 / (2×4) = 0.375   ->  below 0.39, "possible"
@@ -196,14 +171,15 @@ This is not a theoretical concern. P2 identifies the same mechanism as a cause o
 published chatbot failure — *"if it is not sure, 'assume no pain', which can systematically
 skew its outputs"* — and independently measures every chatbot as **underestimating** pain.
 
-**Order matters.** Change 2 (cutting the null quota) without change 1 would make this worse,
-by pushing borderline AUs into 0 rather than 1. They ship together or not at all (F1/F3).
+**Order matters.** Removing the null quota (see load-bearing note 6) without the
+visibility rule would make this worse, by pushing borderline AUs into 0 rather than 1. The two
+belong together (F1/F3).
 
 ---
 
 ## Things that are load-bearing
 
-Carried over from v0 — each was arrived at by getting it wrong first. Don't quietly undo them.
+Each was arrived at by getting it wrong first. Don't quietly undo them.
 
 **1. `strict: true`, not `{"type":"json_object"}`.** `json_object` guarantees valid JSON, not
 *your* JSON. Without strict mode the model returned a paragraph of prose in the
@@ -215,25 +191,25 @@ Express "may be absent" as **nullable** instead.
 **3. Mixed-type nullable enums work.** `{"type": ["integer","null"], "enum": [0,1,2,null]}` is
 how abstention is expressed without a separate boolean flag.
 
-**4. Abstention is still framed as mandatory.** v0 proved that merely *permitting* null ("you
-may answer null if unsure") produced zero nulls, ever. v0.1 keeps the imperative framing and
-changes only the **criterion** — visibility instead of certainty. Do not soften it back into a
+**4. Abstention is framed as mandatory.** Merely *permitting* null ("you may answer null if
+unsure") was measured to produce zero nulls, ever. The imperative framing is what moved the
+behaviour; the **criterion** is visibility rather than certainty. Do not soften it back into a
 permission.
 
 **5. `evidence` is per-AU and mandatory.** The entire explainability pitch, and it makes the
 model commit to a visual justification instead of pattern-matching a plausible score.
 
-**New in v0.1 — 6. The null base rate is stated as observed frequency, not as a quota.** v0's
-"expect at least one null on a typical photo" is ~1.0 nulls/image against an expert average of
-**0.167** (F3). Phrasing it as a rate the model can calibrate against, rather than a target to
-hit, is the intent. If re-running shows the model now *never* nulls, that has overcorrected —
-tighten toward v0's wording rather than reverting wholesale.
+**6. The null base rate is stated as observed frequency, not as a quota.** "Expect at least one
+null on a typical photo" works out at ~1.0 nulls/image against an expert average of **0.167**
+(F3). Phrasing it as a rate the model can calibrate against, rather than a target to hit, is
+the intent. If a run shows the model now *never* nulls, that has overcorrected — tighten the
+wording rather than removing the rate.
 
 ---
 
-## Known risk this change introduces
+## Known risk this rule introduces
 
-Moving uncertainty from null into 1 **will raise scores**, by construction. That is the
+Routing uncertainty into `1` rather than `null` **raises scores**, by construction. That is the
 intended correction, and it is the right direction given the measured underestimation (F2) —
 but it is unbounded here, and a prompt that scores 1 too eagerly would push healthy cats over
 0.39.
@@ -245,11 +221,11 @@ distribution specifically** when re-running, not just the aggregate.
 
 ---
 
-## Still not fixed by v0.1
+## Scope — what this prompt does not address
 
-**Abstention is inconsistent.** Under v0 it fired roughly **1 run in 3** on the same image.
-Hence `SAMPLES_PER_ASSESSMENT = 3` and a per-AU mode. Whether v0.1 changes this rate is one of
-the things re-running measures.
+**Abstention is inconsistent.** It fires roughly **1 run in 3** on the same image. Hence
+`SAMPLES_PER_ASSESSMENT = 3` and a per-AU mode. Whether this wording changes that rate is one
+of the things a run measures.
 
 **`confidence` is not real.** Values are byte-identical across repeated runs of the same photo
 and track *which feature it is* rather than how visible it is — it approximately recites the
@@ -264,22 +240,23 @@ constant correction. Out of scope for a prompt revision; flagged so it is not fo
 
 ---
 
-## Before this replaces v0 — verification checklist
+## Verification checklist
 
-v0 earned "verified" by being run. This must do the same:
+A prompt earns the word "verified" by being run and observed. This one has been run, but the
+checklist below is not complete:
 
-1. Run the existing fixtures **3×** under v0.1 and diff against the v0 numbers in
+1. Run the existing fixtures **3×** and diff against the recorded baseline in
    `MODEL-ACCESS.md`: per-AU score distribution, null rate per AU, and whether any photo
    crosses 0.39.
-2. Confirm the null rate **fell** toward the expert base rate and did not collapse to zero.
-3. Confirm no AU now returns 1 on a photo where all three v0 runs agreed on 0 **and** the
+2. Confirm the null rate sits near the expert base rate and has not collapsed to zero.
+3. Confirm no AU returns 1 on a photo where all three runs previously agreed on 0 **and** the
    feature was plainly visible — that would be over-correction rather than the fix.
 4. Inspect the whiskers distribution specifically (see risk note above).
-5. Re-run the rejection path — none of these edits should touch gating (MODEL-ACCESS #5), so
+5. Re-run the rejection path — none of this wording should touch gating (MODEL-ACCESS #5), so
    any change there is an unintended side effect.
-6. Only then update `MODEL-ACCESS.md` and flip the header of this file to verified.
+6. Only then update `MODEL-ACCESS.md` and flip the status at the top of this file.
 
-### Abstention probe (Phase 1 wiring — narrows step 2, does NOT satisfy it) ⚠️
+### Abstention probe — narrows step 2, does NOT satisfy it ⚠️
 
 The first pass over three clean demo photos returned `scorableCount: 5` every time — a
 **zero null rate**, which is exactly the outcome checklist step 2 says to rule out. Rather
@@ -319,15 +296,15 @@ Two reasons to take this seriously rather than filing it as a synthetic edge cas
    and P9 reports image-based assessment is *worse* than real-time specifically for
    muzzle and whiskers. PurrSight is image-only by construction.
 
-So the accurate claim is narrower than "it does not confabulate": **v0.1 abstains in
+So the accurate claim is narrower than "it does not confabulate": **this prompt abstains in
 response to occlusion, not in response to low signal.** A feature that is covered gets a
 `null`; a feature that is merely too dark to read gets a confident score.
 
 This **narrows** step 2 but does not close it. It is one cat and synthetic degradation,
 and a brightness multiplier is not the same thing as a genuinely black-coated cat
-photographed in a dim room — that comparison needs real photos. **This file stays
-UNVERIFIED** and the six steps above remain unrun. Add underexposed and dark-coat cases
-to the eval set, and check the whisker distribution specifically (checklist step 4).
+photographed in a dim room — that comparison needs real photos. **The checklist above
+remains incomplete.** Add underexposed and dark-coat cases to the eval set, and check the
+whisker distribution specifically (checklist step 4).
 
 Two further observations from the same runs:
 
@@ -344,15 +321,14 @@ Two further observations from the same runs:
 
 ---
 
-## Proposed extension — still NOT VERIFIED ⚠️
+## Proposed extension — NOT VERIFIED ⚠️
 
-Carried over from v0, with the factual correction from F10. Independent of the changes above;
-test separately so the two don't confound each other.
+Independent of everything above; test separately so the two don't confound each other.
 
 `contract.ts` declares two caveat kinds — `brachycephalic` and `dark_coat` — that nothing can
 currently populate, because the schema returns no information about the cat itself.
 
-The justification, stated accurately (v0 overstated this — F10):
+The justification, stated accurately (F10):
 
 - **Brachycephalic:** P1 says brachycephalic breeds **"were not included"**. One Persian and
   one Himalayan were initially recruited but **excluded from final analysis due to poor image

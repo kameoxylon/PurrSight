@@ -8,21 +8,23 @@
  * reads.
  *
  * CHANGING THIS TEXT INVALIDATES EVERY EVAL NUMBER. The workflow is:
- *   1. add docs/PROMPT-V<next>.md
- *   2. copy it here verbatim
- *   3. bump PROMPT_VERSION to match the filename
- *   4. re-run the eval from scratch
+ *   1. write docs/PROMPT-V<next>.md as a STANDALONE spec — it must read as
+ *      though no other version exists, with no references to earlier ones
+ *   2. record the diff from the current version in docs/PROMPT-CHANGE-HISTORY.md,
+ *      which is the only file that compares versions
+ *   3. copy the new prompt here verbatim
+ *   4. bump PROMPT_VERSION to match the filename
+ *   5. re-run the eval from scratch
  * `meta.promptVersion` is a measurement label (contract.ts) — two results with
  * different values are not comparable. eval/run.ts also fingerprints this file
  * into its cache key, so an edit here auto-invalidates cached results.
  *
- * v0.2 rewrites the muzzle and whiskers LEVEL-1 descriptors, which the eval
- * showed the model collapsing to 0. Note carefully: v0.1's wording there was
- * *faithful to the published scale* — these are deliberate elaborations for a
- * zero-shot reader, not corrections of a misquote. Muzzle and whiskers are
- * treated ASYMMETRICALLY on purpose (muzzle is a rule-in feature, whiskers a
- * rule-out one with the worst specificity of the five); see PROMPT-V0.2.md
- * before making either of them more sensitive.
+ * Muzzle and whiskers are treated ASYMMETRICALLY on purpose: muzzle is a
+ * rule-in feature (specificity 0.95), whiskers a rule-out one with the worst
+ * specificity of the five AUs and a known false-positive habit. Muzzle level 1
+ * is written to be reachable; whiskers level 1 is written to be unambiguous
+ * WITHOUT lowering its bar. Read docs/PROMPT-V0.2.md before making either of
+ * them more sensitive.
  */
 
 /** Names its own spec: docs/PROMPT-V0.2.md. See contract.ts AssessmentMeta. */
