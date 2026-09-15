@@ -145,8 +145,11 @@ If you do set it, two things are easy to get wrong:
   public by design — restrict it in Google Cloud Console to the *Maps Embed API*
   and to your hostnames (`http://localhost:3000/*` for local). Never paste an
   unrestricted key here.
-- Because it is inlined at build time, changing it in App Service needs a
-  **rebuild**, not just a restart.
+- Because it is baked in at build time and our build runs in GitHub Actions,
+  **setting this one in App Service does nothing** — the bundle was already
+  built without it. It has to be set on the build step and redeployed. Every
+  other variable in `.env.example` is read at runtime and does belong in App
+  Service configuration.
 
 The map never asks for your location on page load — only when you tap
 *Show vets near me*. Denying the prompt falls back to the link.

@@ -17,6 +17,7 @@ export default function Home() {
   const [result, setResult] = useState<AssessResult | null>(null);
   const [lastBlob, setLastBlob] = useState<Blob | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState(false);
 
   async function assess(blob: Blob) {
     setLastBlob(blob);
@@ -49,7 +50,7 @@ export default function Home() {
   const showUpload = phase === 'idle' && result === null;
 
   return (
-    <div className="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col px-4 pt-10 pb-7 sm:pt-14">
+    <div className="relative z-10 mx-auto flex min-h-screen max-w-5xl flex-col px-4 pt-10 pb-3.5 sm:pt-14">
       <header className="text-center">
         <div className="inline-flex items-center gap-3">
           <span
@@ -81,8 +82,14 @@ export default function Home() {
               <button
                 onClick={async () => {
                   setPdfBusy(true);
+                  setPdfError(false);
                   try {
                     await downloadResultPdf(result.assessment);
+                  } catch (err) {
+                    // Without this the promise rejects unhandled and the button
+                    // just snaps back to idle, looking like a dead control.
+                    console.error('[pdf] failed to build the report', err);
+                    setPdfError(true);
                   } finally {
                     setPdfBusy(false);
                   }
@@ -99,6 +106,11 @@ export default function Home() {
                 Assess another photo
               </button>
             </div>
+            {pdfError && (
+              <p className="text-center text-sm text-rose-600 dark:text-rose-400">
+                We couldn&apos;t build the PDF. Your results are still shown above.
+              </p>
+            )}
           </div>
         )}
 
