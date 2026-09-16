@@ -116,6 +116,11 @@ that have nothing to do with the model.
 > [`../docs/PROMPT-CHANGE-HISTORY.md`](../docs/PROMPT-CHANGE-HISTORY.md), which is
 > the only file that does that comparison. This section reports what the harness
 > measured for v0.2.
+>
+> **Comparing models?** `gpt-4.1` was measured against `gpt-5.1` and `gpt-5.4`
+> using this harness; the result and the reasoning are in
+> [`../docs/MODEL-COMPARISON.md`](../docs/MODEL-COMPARISON.md). Short version:
+> the newer models stop rejecting degraded photos, so we stayed on `gpt-4.1`.
 
 **The headline result is a negative one.** v0.2 rewrote the muzzle and whiskers
 **level-1** descriptors specifically to stop the model collapsing level 1 to 0, and

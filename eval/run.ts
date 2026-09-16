@@ -444,7 +444,15 @@ async function main() {
   console.log(
     `\nPurrSight eval — ${cases.length} case(s) x ${REPEAT} run(s) = ${jobs.length} assessment(s)`,
   );
-  console.log(`prompt ${PROMPT_VERSION} · model ${model} · concurrency ${CONCURRENCY}${FRESH ? ' · CACHE BYPASSED' : ''}`);
+  // Record the sampling regime, not just the model. Some models refuse
+  // temperature 0 and force their own default, which makes cross-sample
+  // agreement mean something different — see samplingParamsFor in client.ts.
+  const { samplingParamsFor } = await import('../src/lib/assess/client');
+  const temp = samplingParamsFor(model).temperature;
+  const tempLabel = temp === undefined ? 'model default (not 0)' : String(temp);
+  console.log(
+    `prompt ${PROMPT_VERSION} · model ${model} · temperature ${tempLabel} · concurrency ${CONCURRENCY}${FRESH ? ' · CACHE BYPASSED' : ''}`,
+  );
 
   const started = Date.now();
   const outcomes = await pool(jobs, CONCURRENCY, (j) =>

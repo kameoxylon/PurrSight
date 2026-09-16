@@ -46,6 +46,59 @@ const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_OUTPUT_TOKENS = 1_000;
 
 /**
+ * Reasoning models bill hidden reasoning tokens against the completion limit,
+ * so the budget that fits a ~250-token JSON answer no longer does. Measured
+ * reasoning usage on a clean photo was 150-183 tokens, but a harder image can
+ * spend much more, and running out truncates the JSON into a parse failure.
+ */
+const MAX_OUTPUT_TOKENS_REASONING = 4_000;
+
+/**
+ * Per-model request parameters.
+ *
+ * Azure rejects our default request shape on newer models in two different
+ * ways. Both were observed directly against live deployments, not inferred:
+ *
+ *   max_tokens      400s on every gpt-5.x — "Unsupported parameter:
+ *                   'max_tokens' is not supported with this model. Use
+ *                   'max_completion_tokens' instead."
+ *   temperature: 0  400s on gpt-5.6-* — "does not support 0.0 with this model.
+ *                   Only the default (1) value is supported." gpt-5.1 and
+ *                   gpt-5.4 accept 0 normally.
+ *
+ * ⚠️ The temperature difference is NOT cosmetic and must not be silently
+ * absorbed. Our three-sample ensemble treats disagreement as a signal about
+ * the image; at temperature 1 some of that disagreement is sampling noise we
+ * did not choose. `agreement` is therefore NOT comparable between a model
+ * pinned at 0 and one forced to 1. `meta.samplingTemperature` records which
+ * regime produced a result so a comparison cannot quietly mix the two.
+ *
+ * Detection is by deployment name, which works because our deployments are
+ * named after their models. AZURE_OPENAI_MODEL_FAMILY overrides it when a
+ * deployment is named something else.
+ */
+export interface SamplingParams {
+  tokenLimit: { max_tokens: number } | { max_completion_tokens: number };
+  /** Undefined means "send no temperature at all"; the model forces its own. */
+  temperature: number | undefined;
+}
+
+export function samplingParamsFor(model: string): SamplingParams {
+  const family = (process.env.AZURE_OPENAI_MODEL_FAMILY ?? model).toLowerCase();
+
+  // Anything that is not a gpt-5.x still takes the original shape.
+  if (!/gpt-5/.test(family)) {
+    return { tokenLimit: { max_tokens: MAX_OUTPUT_TOKENS }, temperature: 0 };
+  }
+
+  const refusesTemperature = /gpt-5\.6/.test(family);
+  return {
+    tokenLimit: { max_completion_tokens: MAX_OUTPUT_TOKENS_REASONING },
+    temperature: refusesTemperature ? undefined : 0,
+  };
+}
+
+/**
  * Don't start a retry that cannot plausibly finish. A call takes 5-7s
  * (docs/MODEL-ACCESS.md), so with less than this left, fail now and let the
  * OTHER samples in the ensemble carry the assessment.
@@ -219,13 +272,16 @@ async function callOnce(
   input: AssessInput,
   timeoutMs: number,
 ): Promise<RawCall> {
+  const params = samplingParamsFor(model);
   const completion = await client.chat.completions.create(
     {
       model,
-      // Deterministic by design: the ensemble's disagreement must come from
-      // genuine model uncertainty, not from sampling noise we injected.
-      temperature: 0,
-      max_tokens: MAX_OUTPUT_TOKENS,
+      // Deterministic where the model allows it: the ensemble's disagreement
+      // must come from genuine model uncertainty, not sampling noise we
+      // injected. Some models refuse anything but their default temperature —
+      // see samplingParamsFor.
+      ...(params.temperature === undefined ? {} : { temperature: params.temperature }),
+      ...params.tokenLimit,
       response_format: {
         type: 'json_schema',
         json_schema: { name: 'fgs_assessment', strict: true, schema: FGS_JSON_SCHEMA },
@@ -247,7 +303,11 @@ async function callOnce(
 
   if (choice?.finish_reason === 'length') {
     // Truncated JSON parses as garbage; say why rather than blaming the schema.
-    throw new ParseFailure(`response truncated at ${MAX_OUTPUT_TOKENS} tokens`, usage);
+    const limit =
+      'max_tokens' in params.tokenLimit
+        ? params.tokenLimit.max_tokens
+        : params.tokenLimit.max_completion_tokens;
+    throw new ParseFailure(`response truncated at ${limit} tokens`, usage);
   }
   if (choice?.finish_reason === 'content_filter') {
     throw new ParseFailure('response blocked by content filter', usage);
