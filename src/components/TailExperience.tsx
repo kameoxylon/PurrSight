@@ -67,7 +67,7 @@ export default function TailExperience() {
 
       {phase === 'idle' && result?.status === 'read' && (
         <div className="space-y-6">
-          <TailResultPanel reading={result.reading} meta={result.meta} />
+          <TailResultPanel reading={result.reading} />
           <div className="flex justify-center">
             <button
               onClick={reset}

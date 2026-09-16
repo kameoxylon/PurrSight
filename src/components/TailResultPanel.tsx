@@ -1,4 +1,4 @@
-import type { TailReading, TailMeta, TailMotion } from '@/lib/tail-contract';
+import type { TailReading, TailMotion } from '@/lib/tail-contract';
 import { TAIL_STATE_META } from '@/lib/tail-contract';
 
 const CONFIDENCE_STYLE: Record<TailReading['confidence'], { label: string; className: string }> = {
@@ -19,13 +19,7 @@ const MOTION_LABEL: Record<TailMotion, string> = {
  * clinical FGS panel — this is body-language for fun, so it leans warm and
  * casual, and never implies a medical finding.
  */
-export default function TailResultPanel({
-  reading,
-  meta,
-}: {
-  reading: TailReading;
-  meta: TailMeta;
-}) {
+export default function TailResultPanel({ reading }: { reading: TailReading }) {
   const emoji = TAIL_STATE_META[reading.state].emoji;
   const conf = CONFIDENCE_STYLE[reading.confidence];
 
@@ -73,11 +67,6 @@ export default function TailResultPanel({
         Just for fun 🐾 Tail reading is a playful take on cat body language, not veterinary or
         behavioural advice. If your cat seems unwell or distressed, talk to a vet.
       </div>
-
-      <p className="text-center text-xs text-faint">
-        Read with {meta.model} · prompt {meta.promptVersion} · {meta.frames} frame
-        {meta.frames > 1 ? 's' : ''} from {meta.source}
-      </p>
     </div>
   );
 }
