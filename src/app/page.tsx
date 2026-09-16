@@ -8,11 +8,14 @@ import RejectionCard from '@/components/RejectionCard';
 import ErrorCard from '@/components/ErrorCard';
 import Disclaimer from '@/components/Disclaimer';
 import PawLogo from '@/components/PawLogo';
+import TailExperience from '@/components/TailExperience';
 import { downloadResultPdf } from '@/lib/download-pdf';
 
 type Phase = 'idle' | 'loading';
+type Mode = 'face' | 'tail';
 
 export default function Home() {
+  const [mode, setMode] = useState<Mode>('face');
   const [phase, setPhase] = useState<Phase>('idle');
   const [result, setResult] = useState<AssessResult | null>(null);
   const [lastBlob, setLastBlob] = useState<Blob | null>(null);
@@ -100,7 +103,7 @@ export default function Home() {
             </span>
           </button>
         </h1>
-        {showResults ? (
+        {mode === 'face' && showResults ? (
           <div className="mt-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-brand">
               Feline Grimace Scale
@@ -117,76 +120,110 @@ export default function Home() {
           </div>
         ) : (
           <p className="mx-auto mt-3 max-w-md text-muted">
-            Upload a photo of your cat for an AI-assisted read on signs of pain, based on the Feline
-            Grimace Scale.
+            {mode === 'face'
+              ? 'Upload a photo of your cat for an AI-assisted read on signs of pain, based on the Feline Grimace Scale.'
+              : 'Upload a photo or short video and we’ll read what your cat’s tail is saying — a playful take on cat body language.'}
           </p>
         )}
       </header>
 
-      <main className="mt-8 flex-1">
-        {showUpload && <UploadCard disabled={false} onSubmit={assess} />}
-
-        {phase === 'loading' && <LoadingState />}
-
-        {phase === 'idle' && result?.status === 'assessed' && (
-          <div className="space-y-6">
-            <ResultPanel assessment={result.assessment} photoUrl={photoUrl} />
-            <div className="flex flex-wrap justify-center gap-3">
-              <button
-                onClick={async () => {
-                  setPdfBusy(true);
-                  setPdfError(false);
-                  try {
-                    await downloadResultPdf(result.assessment);
-                  } catch (err) {
-                    // Without this the promise rejects unhandled and the button
-                    // just snaps back to idle, looking like a dead control.
-                    console.error('[pdf] failed to build the report', err);
-                    setPdfError(true);
-                  } finally {
-                    setPdfBusy(false);
-                  }
-                }}
-                disabled={pdfBusy}
-                className="rounded-full bg-brand px-6 py-2.5 text-sm font-semibold text-brand-ink transition hover:bg-brand-hover disabled:opacity-60"
-              >
-                {pdfBusy ? 'Preparing PDF…' : 'Download results (PDF)'}
-              </button>
-              <button
-                onClick={reset}
-                className="rounded-full border border-line bg-card px-6 py-2.5 text-sm font-semibold text-ink transition hover:bg-surface-2"
-              >
-                Assess another photo
-              </button>
-            </div>
-            {pdfError && (
-              <p className="text-center text-sm text-rose-600 dark:text-rose-400">
-                We couldn&apos;t build the PDF. Your results are still shown above.
-              </p>
-            )}
+      {/* Mode switch. Hidden while a face assessment is in flight so an
+          in-progress request can't be orphaned by a mode change. */}
+      {phase !== 'loading' && (
+        <div className="mt-6 flex justify-center">
+          <div className="inline-flex rounded-full border border-line bg-card p-1 text-sm font-semibold shadow-sm">
+            <button
+              type="button"
+              onClick={() => setMode('face')}
+              className={`rounded-full px-4 py-1.5 transition ${
+                mode === 'face' ? 'bg-brand text-brand-ink' : 'text-muted hover:text-ink'
+              }`}
+            >
+              😺 Face &amp; pain
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('tail')}
+              className={`rounded-full px-4 py-1.5 transition ${
+                mode === 'tail' ? 'bg-brand text-brand-ink' : 'text-muted hover:text-ink'
+              }`}
+            >
+              🐈 Tail talk
+            </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {phase === 'idle' && result?.status === 'rejected' && (
-          <RejectionCard
-            reason={result.reason}
-            message={result.message}
-            retakeTips={result.retakeTips}
-            onRetake={reset}
-          />
-        )}
+      <main className="mt-8 flex-1">
+        {mode === 'tail' ? (
+          <TailExperience />
+        ) : (
+          <>
+            {showUpload && <UploadCard disabled={false} onSubmit={assess} />}
 
-        {phase === 'idle' && result?.status === 'error' && (
-          <ErrorCard
-            message={result.message}
-            retryable={result.retryable}
-            onRetry={() => lastBlob && assess(lastBlob)}
-            onReset={reset}
-          />
+            {phase === 'loading' && <LoadingState />}
+
+            {phase === 'idle' && result?.status === 'assessed' && (
+              <div className="space-y-6">
+                <ResultPanel assessment={result.assessment} photoUrl={photoUrl} />
+                <div className="flex flex-wrap justify-center gap-3">
+                  <button
+                    onClick={async () => {
+                      setPdfBusy(true);
+                      setPdfError(false);
+                      try {
+                        await downloadResultPdf(result.assessment);
+                      } catch (err) {
+                        // Without this the promise rejects unhandled and the button
+                        // just snaps back to idle, looking like a dead control.
+                        console.error('[pdf] failed to build the report', err);
+                        setPdfError(true);
+                      } finally {
+                        setPdfBusy(false);
+                      }
+                    }}
+                    disabled={pdfBusy}
+                    className="rounded-full bg-brand px-6 py-2.5 text-sm font-semibold text-brand-ink transition hover:bg-brand-hover disabled:opacity-60"
+                  >
+                    {pdfBusy ? 'Preparing PDF…' : 'Download results (PDF)'}
+                  </button>
+                  <button
+                    onClick={reset}
+                    className="rounded-full border border-line bg-card px-6 py-2.5 text-sm font-semibold text-ink transition hover:bg-surface-2"
+                  >
+                    Assess another photo
+                  </button>
+                </div>
+                {pdfError && (
+                  <p className="text-center text-sm text-rose-600 dark:text-rose-400">
+                    We couldn&apos;t build the PDF. Your results are still shown above.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {phase === 'idle' && result?.status === 'rejected' && (
+              <RejectionCard
+                reason={result.reason}
+                message={result.message}
+                retakeTips={result.retakeTips}
+                onRetake={reset}
+              />
+            )}
+
+            {phase === 'idle' && result?.status === 'error' && (
+              <ErrorCard
+                message={result.message}
+                retryable={result.retryable}
+                onRetry={() => lastBlob && assess(lastBlob)}
+                onReset={reset}
+              />
+            )}
+          </>
         )}
       </main>
 
-      <Disclaimer variant={showResults ? 'short' : 'full'} />
+      <Disclaimer variant={mode === 'face' && showResults ? 'short' : 'full'} />
     </div>
   );
 }
