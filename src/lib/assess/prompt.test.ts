@@ -11,18 +11,28 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { PROMPT_VERSION, SYSTEM_PROMPT } from './prompt';
+import {
+  PROMPT_VERSION,
+  PROMPT_VERSION_FEWSHOT,
+  SYSTEM_PROMPT,
+  SYSTEM_PROMPT_FEWSHOT,
+} from './prompt';
 
 const SPEC_PATH = join(process.cwd(), 'docs', `PROMPT-${PROMPT_VERSION.toUpperCase()}.md`);
+const SPEC_PATH_FEWSHOT = join(
+  process.cwd(),
+  'docs',
+  `PROMPT-${PROMPT_VERSION_FEWSHOT.toUpperCase()}.md`,
+);
 
 /** The first ```text fence under the "## System prompt" heading. */
-function specSystemPrompt(): string {
-  const md = readFileSync(SPEC_PATH, 'utf8');
+function specSystemPrompt(path = SPEC_PATH): string {
+  const md = readFileSync(path, 'utf8');
   const section = md.split(/^## System prompt\s*$/m)[1];
-  expect(section, `no "## System prompt" heading in ${SPEC_PATH}`).toBeDefined();
+  expect(section, `no "## System prompt" heading in ${path}`).toBeDefined();
 
   const fence = section.match(/```text\r?\n([\s\S]*?)```/);
-  expect(fence, `no \`\`\`text block under "## System prompt" in ${SPEC_PATH}`).not.toBeNull();
+  expect(fence, `no \`\`\`text block under "## System prompt" in ${path}`).not.toBeNull();
 
   // Normalise line endings only. Any other difference is a real drift and
   // should fail: the whitespace alignment of the action-unit block is part of
@@ -87,5 +97,55 @@ describe('prompt content invariants', () => {
     expect(SYSTEM_PROMPT).toMatch(/standing on end \(spiked\)/);
     expect(SYSTEM_PROMPT).toMatch(/elliptical shape/);
     expect(SYSTEM_PROMPT).toMatch(/chin toward\n\s+the chest/);
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * v0.3 — the rubric plus visual reference anchors.
+ *
+ * Without these, the only thing distinguishing v0.3 from v0.2 would be a
+ * version string, and the label would be unfalsifiable: a regression that
+ * dropped the anchors entirely would still report promptVersion v0.3.
+ * ------------------------------------------------------------------------ */
+describe('prompt v0.3 (few-shot)', () => {
+  it('is verbatim from its own spec', () => {
+    expect(SYSTEM_PROMPT_FEWSHOT.replace(/\r\n/g, '\n')).toBe(specSystemPrompt(SPEC_PATH_FEWSHOT));
+  });
+
+  it('tells the model the drawings are not the subject', () => {
+    // The failure mode this change introduces: 16 cats in context, one to
+    // score. Scoring a reference drawing instead would be silent and wrong.
+    expect(SYSTEM_PROMPT_FEWSHOT).toMatch(/NOT\nTHE ANIMAL YOU ARE ASSESSING/);
+    expect(SYSTEM_PROMPT_FEWSHOT).toMatch(/Assess ONLY the final photograph/);
+  });
+
+  it('states the anchor count and ordering the code actually sends', () => {
+    // fewshot.ts emits 5 action units x 3 levels, ordered by AU then severity.
+    // If either side changes without the other, the model is told one thing
+    // and shown another.
+    expect(SYSTEM_PROMPT_FEWSHOT).toMatch(/15 reference drawings/);
+    expect(SYSTEM_PROMPT_FEWSHOT).toMatch(
+      /ears 0, 1, 2, then eyes 0, 1, 2, then muzzle 0, 1, 2, then whiskers 0, 1, 2,\s*\n?\s*then head 0, 1, 2/,
+    );
+  });
+
+  it('directs attention at the intermediate level, which is the hypothesis', () => {
+    expect(SYSTEM_PROMPT_FEWSHOT).toMatch(/middle drawing/);
+    expect(SYSTEM_PROMPT_FEWSHOT).toMatch(/is a 1, not a 0/);
+  });
+
+  it('keeps the rubric identical to v0.2 so the delta is attributable', () => {
+    // Everything from the action-unit block onward must match v0.2 exactly.
+    // If the rubric drifts too, an observed change cannot be attributed to the
+    // anchors rather than to rewording.
+    const from = (s: string) => s.slice(s.indexOf('Score each of 5 action units'));
+    const v02 = from(SYSTEM_PROMPT);
+    const v03 = from(SYSTEM_PROMPT_FEWSHOT);
+
+    // v0.3 scopes the rejection sentence to the final photograph; that clause
+    // is the only permitted divergence in the shared region.
+    const normalise = (s: string) =>
+      s.replace(/If (there is no cat|the final photograph has no cat)[\s\S]*$/, '<<rejection>>');
+    expect(normalise(v03)).toBe(normalise(v02));
   });
 });

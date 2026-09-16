@@ -21,6 +21,112 @@ the file. If you want to know *what the prompt currently says*, read the version
 
 ---
 
+## v0.2 → v0.3
+
+**Theme:** stop describing the intermediate level and start showing it.
+
+**Motivated by** two negative results rather than a new idea. v0.2 rewrote the level-1
+descriptors in prose and the model still scored them 0; the model comparison then showed
+`gpt-5.1` and `gpt-5.4` do not fix it either, and `gpt-5.4` fails in a worse way by answering
+`1` for every image. Words were the cheap hypothesis and newer models were the lazy one. Both
+are now ruled out, which leaves the thing human raters actually learn from: the reference
+images.
+
+### Added — 15 reference drawings attached to every request
+
+The published `_guide` line drawings, one per (action unit, level), sent as their own user turn
+before the photo, ordered `ears 0,1,2 · eyes 0,1,2 · muzzle 0,1,2 · whiskers 0,1,2 ·
+head 0,1,2`, each preceded by an explicit `ears = 0` style label.
+
+**The `_sample1` photographs are deliberately NOT attached.** They are the eval's only
+sensitivity probe; using them as anchors would score the model on examples it had just been
+shown and would destroy the measurement. Drawings in, photographs held out.
+
+### Added — anchor framing in the system prompt
+
+```diff
++ You are shown 15 reference drawings, then ONE photograph.
++
++ The drawings are the published FGS reference illustrations. They come in a fixed
++ order - ears 0, 1, 2, then eyes 0, 1, 2, ... - and they show what each score looks
++ like. THE DRAWINGS ARE NOT THE ANIMAL YOU ARE ASSESSING. Never score them, never
++ describe them, and never let one of them be your answer.
++
++ Assess ONLY the final photograph.
++
++ Use the drawings as your calibration, and pay particular attention to the middle
++ drawing of each group of three. That middle drawing is the intermediate level, and
++ it is the one most often missed - a face that looks like it belongs between the
++ first and third drawings is a 1, not a 0.
+```
+
+This is not decoration. With 16 cats in context and one to score, scoring an anchor instead is
+a real and silent failure mode.
+
+### Reworded — the rejection sentence is scoped to the photograph
+
+```diff
+- If there is no cat, the face is not visible, there are multiple cats, or quality is
+- inadequate: status="rejected", ...
++ If the final photograph has no cat, the face is not visible, there are multiple cats,
++ or quality is inadequate: status="rejected", ...
++ The reference drawings never affect this decision.
+```
+
+Otherwise "there are multiple cats" is trivially true of every request.
+
+### Unchanged
+
+The entire rubric from `Score each of 5 action units` onward, and the JSON schema. A test
+enforces the rubric equality, so an observed change can be attributed to the anchors rather
+than to simultaneous rewording.
+
+### Operational notes
+
+- **Opt-in.** `FGS_FEWSHOT=1`. With the flag off the pipeline sends the earlier prompt and
+  records the earlier version label, so earlier measurements stay valid.
+- **Fails open.** Missing reference directory means the no-anchor request, not a failed
+  assessment.
+- **No image is committed.** The drawings are © Université de Montréal and this repository is
+  public. They are resolved at run time from outside the repo.
+
+### Outcome — mixed, and left switched off
+
+**2 of 4 pre-written criteria failed.** Run on `gpt-4.1`, 55 cases: 33/35 asserted against 35/35
+without anchors.
+
+| # | Criterion | Result |
+|---|---|---|
+| 1 | `fgs-muzzle-1` scores 1 | 🔴 failed — still `0` |
+| 2 | `fgs-whiskers-1` scores 1, distribution stays varied | ✅ passed |
+| 3 | `comfortable` stays 5/5 | ✅ held |
+| 4 | gating and abstention do not regress | 🔴 failed |
+
+**The win is real:** whiskers level-1 moved `0` → `1`, and the whiskers distribution across the
+15 references stayed varied (`0`×9 `1`×3 `2`×3) rather than collapsing to a constant. Prose
+could not move that action unit and neither could a newer model.
+
+**The regression is safety-critical:** a cat with its ears painted out went from
+`rejected/face_not_visible` to `0.30 possible`, and one occlusion case lost its `null`.
+Abstention 3/3 → 2/3, gating 13/13 → 12/13. Fifteen scorable examples in context appear to bias
+the model toward "score this" and away from "is this scorable?", despite an explicit
+instruction that the drawings never affect rejection.
+
+**Everything that moved, moved up** — all eight changed reference scores increased. A uniform
+upward shift is not improved discrimination; on severe cases it reads as sensitivity, on
+`tabby-occl-ears` the same shift is what turns a refusal into a score.
+
+**Cost:** input tokens 1,678 → 5,291 (3.15×), cost per assessment $0.0156 → $0.0302 (1.94×),
+latency ~7 s → ~11 s. Prompt caching halves samples 2 and 3. The payload also broke the
+deployment's 50K TPM quota outright — 45 of 47 assessments errored until capacity was raised
+to 500K.
+
+**Kept opt-in and off by default.** A genuine whiskers gain does not pay for a model that
+scores a cat it cannot see, at twice the price. The next experiment is whether the gating
+regression can be separated from the sensitivity gain.
+
+---
+
 ## v0.1 → v0.2
 
 **Theme:** make the *intermediate* (level-1) descriptors operational, and stop the model

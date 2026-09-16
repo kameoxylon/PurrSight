@@ -427,7 +427,8 @@ async function main() {
   // Imported late and dynamically: the module builds a provider client from
   // env at import time, so it must not load before .env.local is applied.
   const { assessImage } = await import('../src/lib/assess/index');
-  const { PROMPT_VERSION } = await import('../src/lib/assess/prompt');
+  const { activePrompt } = await import('../src/lib/assess/prompt');
+  const PROMPT_VERSION = activePrompt().version;
   const { getModelName } = await import('../src/lib/assess/client');
 
   let model: string;

@@ -18,10 +18,14 @@
  * this, one bad sample could burn 2x the timeout and blow the demo's latency.
  */
 import { AzureOpenAI, OpenAI } from 'openai';
-import type { ChatCompletionContentPart } from 'openai/resources/chat/completions';
+import type {
+  ChatCompletionContentPart,
+  ChatCompletionMessageParam,
+} from 'openai/resources/chat/completions';
 import { DefaultAzureCredential, getBearerTokenProvider } from '@azure/identity';
 import type { AssessErrorKind, AssessInput } from '../contract';
-import { SYSTEM_PROMPT, USER_PROMPT } from './prompt';
+import { activePrompt, PROMPT_VERSION_FEWSHOT, SYSTEM_PROMPT, USER_PROMPT } from './prompt';
+import { loadAnchors, type Anchor } from './fewshot';
 import {
   EMPTY_USAGE,
   addUsage,
@@ -261,6 +265,34 @@ function buildContent(input: AssessInput): ChatCompletionContentPart[] {
   ];
 }
 
+/**
+ * The v0.3 anchor block: the 15 published reference drawings, ordered by action
+ * unit and ascending severity, sent as their own user turn BEFORE the photo.
+ *
+ * Separate turn, and first, for two reasons:
+ *   1. Prompt caching keys on an identical leading prefix. System prompt +
+ *      anchors never vary, so samples 2 and 3 of an assessment should read the
+ *      cache. If `cached_tokens` stays 0, this prefix is not actually stable.
+ *   2. The photo stays last, which is what the prompt tells the model to score.
+ *
+ * `detail: 'high'` matches the photo. Mixing detail levels changes the cache
+ * key, and the level-1 distinctions these drawings exist to teach are exactly
+ * what 'low' would blur away.
+ */
+function buildAnchorContent(anchors: Anchor[]): ChatCompletionContentPart[] {
+  const parts: ChatCompletionContentPart[] = [
+    {
+      type: 'text',
+      text: 'Reference drawings from the published Feline Grimace Scale. These are not the cat to assess.',
+    },
+  ];
+  for (const a of anchors) {
+    parts.push({ type: 'text', text: `${a.au} = ${a.score}` });
+    parts.push({ type: 'image_url', image_url: { url: a.dataUrl, detail: 'high' } });
+  }
+  return parts;
+}
+
 interface RawCall {
   text: string;
   finishReason: string;
@@ -273,6 +305,23 @@ async function callOnce(
   timeoutMs: number,
 ): Promise<RawCall> {
   const params = samplingParamsFor(model);
+  const prompt = activePrompt();
+
+  // Few-shot is opt-in AND fails open: if the reference drawings are missing we
+  // send the plain request rather than refusing to assess someone's cat.
+  const anchors = prompt.version === PROMPT_VERSION_FEWSHOT ? loadAnchors() : null;
+  const messages: ChatCompletionMessageParam[] = anchors
+    ? [
+        { role: 'system', content: prompt.system },
+        { role: 'user', content: buildAnchorContent(anchors) },
+        { role: 'user', content: buildContent(input) },
+      ]
+    : [
+        // Byte-identical to the request that produced every v0.2 measurement.
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: buildContent(input) },
+      ];
+
   const completion = await client.chat.completions.create(
     {
       model,
@@ -286,10 +335,7 @@ async function callOnce(
         type: 'json_schema',
         json_schema: { name: 'fgs_assessment', strict: true, schema: FGS_JSON_SCHEMA },
       },
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildContent(input) },
-      ],
+      messages,
     },
     { timeout: timeoutMs },
   );

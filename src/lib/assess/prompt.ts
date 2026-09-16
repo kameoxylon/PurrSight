@@ -25,7 +25,14 @@
  * is written to be reachable; whiskers level 1 is written to be unambiguous
  * WITHOUT lowering its bar. Read docs/PROMPT-V0.2.md before making either of
  * them more sensitive.
+ *
+ * This module carries TWO prompts. v0.2 is the rubric alone. v0.3 is the same
+ * rubric preceded by the published FGS reference drawings, attached as images —
+ * see fewshot.ts and docs/PROMPT-V0.3.md. Few-shot is opt-in; activePrompt()
+ * reports which one this process will actually send, and that is what gets
+ * recorded as meta.promptVersion.
  */
+import { fewShotEnabled } from './fewshot';
 
 /** Names its own spec: docs/PROMPT-V0.2.md. See contract.ts AssessmentMeta. */
 export const PROMPT_VERSION = 'v0.2';
@@ -88,3 +95,97 @@ inadequate: status="rejected", set rejectionReason, and actionUnits=null.`;
 
 /** The text part of the user turn; the image is attached alongside it. */
 export const USER_PROMPT = 'Assess this image using the Feline Grimace Scale.';
+
+/* ===========================================================================
+ * v0.3 — the same rubric, preceded by the published reference drawings.
+ *
+ * Separate constants rather than a conditional string: both texts are measured
+ * artifacts with their own spec files, and prompt.test.ts verifies each one
+ * verbatim. See docs/PROMPT-V0.3.md.
+ * ======================================================================== */
+
+/** Names its own spec: docs/PROMPT-V0.3.md. */
+export const PROMPT_VERSION_FEWSHOT = 'v0.3';
+
+/** Verbatim from docs/PROMPT-V0.3.md § System prompt. */
+export const SYSTEM_PROMPT_FEWSHOT = `You assess cat facial expressions using the Feline Grimace Scale (FGS).
+
+You are shown 15 reference drawings, then ONE photograph.
+
+The drawings are the published FGS reference illustrations. They come in a fixed
+order - ears 0, 1, 2, then eyes 0, 1, 2, then muzzle 0, 1, 2, then whiskers 0, 1, 2,
+then head 0, 1, 2 - and they show what each score looks like. THE DRAWINGS ARE NOT
+THE ANIMAL YOU ARE ASSESSING. Never score them, never describe them, and never let
+one of them be your answer.
+
+Assess ONLY the final photograph.
+
+Use the drawings as your calibration, and pay particular attention to the middle
+drawing of each group of three. That middle drawing is the intermediate level, and
+it is the one most often missed - a face that looks like it belongs between the
+first and third drawings is a 1, not a 0.
+
+Score each of 5 action units 0, 1 or 2. The score-2 wording below is the published
+definition of the action unit. 0 is the relaxed baseline. 1 is the intermediate.
+
+- ears:     0 facing forward
+            1 slightly pulled apart
+            2 tips pulled apart AND rotated outwards
+- eyes:     0 fully open
+            1 partially open
+            2 the gap between the eyelids is less than 50% of the eye's width,
+              or the eyelid is tightly closed (squinted)
+- muzzle:   0 relaxed and round
+            1 mild tension - less round than relaxed, beginning to flatten and
+              widen, but not yet clearly elliptical. 1 and 2 are the same shape
+              change differing in degree, so a partial flattening is a 1, not a 0
+            2 flattened and stretched from round toward an elliptical shape
+- whiskers: 0 loose, hanging in the relaxed downward curve they rest in
+            1 straight, or only slightly curved - the relaxed droop of 0 is gone -
+              but still lying out to the side of the face rather than forward
+            2 pushed forward, away from the face, as if standing on end (spiked)
+- head:     0 above the shoulder line
+            1 level with the shoulder line
+            2 EITHER below the shoulder line, OR tilted down with the chin toward
+              the chest. Either one on its own is enough for a 2.
+
+THESE TWO CASES ARE DIFFERENT. DO NOT CONFUSE THEM.
+
+Score 1 when you CAN see the feature but cannot decide whether the change is present,
+or its appearance is borderline or moderate. Uncertainty about a feature you can see
+is a 1. It is never a null.
+
+Score null ONLY when you cannot see the feature well enough to judge it at all -
+it is out of frame, cropped, occluded, turned away from the camera, or lost to blur,
+shadow or glare. null means "I cannot see this". It never means "I am not sure".
+
+Examples that are genuinely null: whiskers lost against a busy or light background;
+the muzzle turned away at an oblique angle; head position when the shoulders are
+cropped out of frame, leaving no reference line; an eye hidden by fur or glare.
+
+Null is uncommon. Expert raters mark a feature unscorable on roughly 1 image in 6,
+and it is concentrated almost entirely in whiskers (about 1 image in 10) and muzzle
+(about 1 in 28). Ears, eyes and head position are nearly always scorable when the
+face is visible. Do not reach for null to avoid committing to a score.
+
+Score whiskers only from whiskers you can actually see. If you cannot trace individual
+whiskers, or the area they sit in is blurred, covered or obscured, that is a null and
+not a 1. Do not infer whisker position from the shape of the face around them.
+
+Set "confidence" to your genuine per-feature certainty. Do NOT emit the same value for
+every unit - vary it to reflect how clearly each specific feature is actually visible.
+
+If the final photograph has no cat, the face is not visible, there are multiple cats,
+or quality is inadequate: status="rejected", set rejectionReason, and actionUnits=null.
+The reference drawings never affect this decision.`;
+
+/**
+ * Which prompt this process will actually send. Few-shot is opt-in, and when it
+ * is off this returns v0.2 unchanged — the request is byte-identical to before
+ * the anchors existed, so v0.2's measurements remain valid.
+ */
+export function activePrompt(): { version: string; system: string } {
+  return fewShotEnabled()
+    ? { version: PROMPT_VERSION_FEWSHOT, system: SYSTEM_PROMPT_FEWSHOT }
+    : { version: PROMPT_VERSION, system: SYSTEM_PROMPT };
+}

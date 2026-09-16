@@ -28,7 +28,7 @@ import {
 } from '../contract';
 import { getModelName, runSingleAssessment, type RunOutcome } from './client';
 import { MIN_IMAGE_EDGE, readImageDimensions } from './image-dimensions';
-import { PROMPT_VERSION } from './prompt';
+import { activePrompt } from './prompt';
 import {
   EMPTY_USAGE,
   addUsage,
@@ -174,7 +174,7 @@ export const assessImage: AssessImageFn = async (input): Promise<AssessResult> =
     const result =
       survivors.length < MIN_CONTRIBUTING_SAMPLES
         ? toError(dominantKind(failures))
-        : aggregate(survivors, { model: getModelName(), promptVersion: PROMPT_VERSION });
+        : aggregate(survivors, { model: getModelName(), promptVersion: activePrompt().version });
 
     logOutcome(id, startedAt, survivors.length, billed, result);
     return result;
